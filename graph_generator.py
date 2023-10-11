@@ -234,20 +234,25 @@ class Graph_generator:
         # 膨胀障碍物
         inf_robot_belief = self.inflation_robot_belief(robot_belief, radius=8)
 
-        for i, p in enumerate(X):
-            for j, neighbour in enumerate(X[indices[i][:]]):
-                start = p
-                end = neighbour
-                # if not self.check_collision(start, end, robot_belief):
-                if not self.check_collision(start, end, inf_robot_belief):
-                    a = str(self.find_index_from_coords(node_coords, p))
-                    b = str(self.find_index_from_coords(node_coords, neighbour))
-                    self.graph.add_node(a)
-                    self.graph.add_edge(a, b, distances[i, j])
+        # 对于i节点丢失的bug进行重建模
+        while True:
+            for i, p in enumerate(X):
+                for j, neighbour in enumerate(X[indices[i][:]]):
+                    start = p
+                    end = neighbour
+                    # if not self.check_collision(start, end, robot_belief):
+                    if not self.check_collision(start, end, inf_robot_belief):
+                        a = str(self.find_index_from_coords(node_coords, p))
+                        b = str(self.find_index_from_coords(node_coords, neighbour))
+                        self.graph.add_node(a)
+                        self.graph.add_edge(a, b, distances[i, j])
 
-                    if self.plot:
-                        self.x.append([p[0], neighbour[0]])
-                        self.y.append([p[1], neighbour[1]])
+                        if self.plot:
+                            self.x.append([p[0], neighbour[0]])
+                            self.y.append([p[1], neighbour[1]])
+            if len(self.graph.edges) == len(self.graph.nodes):
+                break
+            print("节点丢失，重新更新")
 
     def find_index_from_coords(self, node_coords, p):
         return np.where(np.linalg.norm(node_coords - p, axis=1) < 1e-5)[0][0]

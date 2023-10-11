@@ -353,11 +353,12 @@ class GazeboEnv:
 
     def get_frontier_callback(self, frontier_marker):
         if self.update_frontier_flag is True:
-            x_coordinates = [point.x for point in frontier_marker.points]
-            y_coordinates = [point.y for point in frontier_marker.points]
-            # Create a 2D NumPy array from the x and y coordinates
-            self.frontiers = np.array([x_coordinates, y_coordinates]).T
-            self.update_frontier_flag = False
+            if len(frontier_marker.points) > 0:
+                x_coordinates = [point.x for point in frontier_marker.points]
+                y_coordinates = [point.y for point in frontier_marker.points]
+                # Create a 2D NumPy array from the x and y coordinates
+                self.frontiers = np.array([x_coordinates, y_coordinates]).T
+                self.update_frontier_flag = False
 
     def update_robot_belief(self, robot_belief):
         self.old_robot_belief = robot_belief
@@ -520,7 +521,9 @@ class GazeboEnv:
             run_time = timeit.default_timer()
             if run_time - start_time_1 > 5:
                 # no_nbv =
-                return 0, False, self.robot_position, travel_dist, False, True
+                print("step获取不到边界")
+                # 重启nbv，不应该直接返回，因为有的时候地图出问题，会导致nbv出问题。而不是探索完了，先直接返回吧，但是还是要区分nbv和done
+                return 0, False, self.robot_position, travel_dist, False, True, 0
         end_time = timeit.default_timer()
         execution_time = end_time - start_time_1
         # print("更新边界信息成功，用时{}s".format(execution_time))

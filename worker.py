@@ -57,7 +57,8 @@ class Worker:
             if distance < closest_distance:
                 closest_distance = distance
                 closest_point = point
-
+        if closest_point is None:
+            pass
         return np.array([closest_point.x, closest_point.y])
 
     def get_center_frontiers_callback(self, center_frontier_maker):
@@ -115,6 +116,8 @@ class Worker:
             (0, self.node_padding_size - len(edge_inputs), 0, self.node_padding_size - len(edge_inputs)), 1)
         edge_mask = padding(edge_mask)
 
+        if current_index > edge_inputs.__len__():
+            pass
         edge = edge_inputs[current_index]
         while len(edge) < self.k_size:
             edge.append(0)
@@ -172,6 +175,7 @@ class Worker:
 
     def run_episode(self, curr_episode):
         done = False
+        no_nbv = False
         # self.env.clear_trajectory()
 
         observations = self.get_observations()
@@ -193,6 +197,13 @@ class Worker:
             # 这里直接跳出会导致 经验池的尺寸出问题
             # if reward < -10000:
             #     break
+            # 在nbv异常终止的情况下，仅仅重启nbv不跳出
+            if no_nbv:
+                reset_msg = Int8()
+                reset_msg.data = 1
+                self.reset_nbv_pub.publish(reset_msg)
+                time.sleep(2)
+                no_nbv = False
             self.save_reward_done(reward, done)
             print("reward:{}".format(reward))
             observations = self.get_observations()
@@ -201,12 +212,14 @@ class Worker:
             self.update_center_frontier = True
             # 簇中心点不再出现
             mutex = True
+            # 重启后仍然获取不到边界中心，跳出，重置环境后再次重启nbv
             while self.update_center_frontier is True and mutex is True:
                 end_time = timeit.default_timer()
                 execution_time = end_time - start_time
                 if execution_time > 5:
                     # 重新唤醒nbv
                     # 跳出循环
+                    print("超时，获取不到边界中心")
                     no_nbv = True
                     mutex = False
             # plt.imshow(self.env.robot_belief, cmap='gray')
@@ -218,13 +231,7 @@ class Worker:
                 self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
 
             # 判断是否出现了规划失败，不再判断
-            if done:
-                break
-            elif no_nbv:
-                reset_msg = Int8()
-                reset_msg.data = 1
-                self.reset_nbv_pub.publish(reset_msg)
-                time.sleep(2)
+            if done or no_nbv:
                 break
 
         self.env.clear_trajectory()
@@ -239,6 +246,13 @@ class Worker:
             path = gifs_path
             self.make_gif(path, curr_episode)
         self.env.reset()
+        # 重启nbv
+        if no_nbv is True:
+            reset_msg = Int8()
+            reset_msg.data = 1
+            self.reset_nbv_pub.publish(reset_msg)
+            time.sleep(2)
+
 
     def work(self, currEpisode):
         self.run_episode(currEpisode)
