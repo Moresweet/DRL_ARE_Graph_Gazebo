@@ -116,21 +116,31 @@ class Worker:
             (0, self.node_padding_size - len(edge_inputs), 0, self.node_padding_size - len(edge_inputs)), 1)
         edge_mask = padding(edge_mask)
 
+        # 上次重写while后不会出现这个溢出了，但是怀疑是会出现没有的情况
         if current_index > edge_inputs.__len__():
-            pass
+            print("数组要溢出了")
+            # 暂时来看这里也可以作为里程计和地图出错的判断标准
+            return None
+        try:
+            edge = edge_inputs[current_index]
+        except IndexError:
+            return None
         edge = edge_inputs[current_index]
-        while len(edge) < self.k_size:
-            edge.append(0)
+        if edge is not None:
+            while len(edge) < self.k_size:
+                edge.append(0)
 
-        edge_inputs = torch.tensor(edge).unsqueeze(0).unsqueeze(0).to(self.device)  # (1, 1, k_size)
+            edge_inputs = torch.tensor(edge).unsqueeze(0).unsqueeze(0).to(self.device)  # (1, 1, k_size)
 
-        # calculate a mask for the padded edges (denoted by 0)
-        edge_padding_mask = torch.zeros((1, 1, K_SIZE), dtype=torch.int64).to(self.device)
-        one = torch.ones_like(edge_padding_mask, dtype=torch.int64).to(self.device)
-        edge_padding_mask = torch.where(edge_inputs == 0, one, edge_padding_mask)
+            # calculate a mask for the padded edges (denoted by 0)
+            edge_padding_mask = torch.zeros((1, 1, K_SIZE), dtype=torch.int64).to(self.device)
+            one = torch.ones_like(edge_padding_mask, dtype=torch.int64).to(self.device)
+            edge_padding_mask = torch.where(edge_inputs == 0, one, edge_padding_mask)
 
-        observations = node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask
-        return observations
+            observations = node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask
+            return observations
+        else:
+            return None
 
     def select_node(self, observations):
         node_inputs, edge_inputs, current_index, node_padding_mask, edge_padding_mask, edge_mask = observations
@@ -179,60 +189,91 @@ class Worker:
         # self.env.clear_trajectory()
 
         observations = self.get_observations()
+        # obervations 在地图漂移的情况下会是None
+        # 这个标志位的逻辑是正常情况的话会变为False
+        is_observation_null = True
         # for i in range(128):
         # 30步一个episode，这个地方根据地图大小动态调整
-        for i in range(60):
-            # 经验池是一条一条的
-            self.save_observations(observations)
-            next_position, action_index = self.select_node(observations)
-
-            policy_center_frontier = self.select_closest_frontier(next_position)
-            # 经验池保存动作
-            self.save_action(action_index)
-            # print("nextposition:{} {}", next_position[0], next_position[1])
-            reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
-                policy_center_frontier,
-                next_position,
-                self.travel_dist)
-            # 这里直接跳出会导致 经验池的尺寸出问题
-            # if reward < -10000:
-            #     break
-            # 在nbv异常终止的情况下，仅仅重启nbv不跳出
-            if no_nbv:
-                reset_msg = Int8()
-                reset_msg.data = 1
-                self.reset_nbv_pub.publish(reset_msg)
-                time.sleep(2)
-                no_nbv = False
-            self.save_reward_done(reward, done)
-            print("reward:{}".format(reward))
-            observations = self.get_observations()
-            self.save_next_observations(observations)
-            start_time = timeit.default_timer()
-            self.update_center_frontier = True
-            # 簇中心点不再出现
-            mutex = True
-            # 重启后仍然获取不到边界中心，跳出，重置环境后再次重启nbv
-            while self.update_center_frontier is True and mutex is True:
-                end_time = timeit.default_timer()
-                execution_time = end_time - start_time
-                if execution_time > 5:
-                    # 重新唤醒nbv
-                    # 跳出循环
-                    print("超时，获取不到边界中心")
-                    no_nbv = True
-                    mutex = False
-            # plt.imshow(self.env.robot_belief, cmap='gray')
-            # plt.show()
-            # save a frame
-            if self.save_image:
-                if not os.path.exists(gifs_path):
-                    os.makedirs(gifs_path)
-                self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
-
-            # 判断是否出现了规划失败，不再判断
+        while is_observation_null is True:
             if done or no_nbv:
                 break
+            if observations is None:
+                # 环境重启，重新这一轮
+                self.env.reset()
+            for i in range(60):
+                # 经验池是一条一条的
+                if observations is None:
+                    observations = self.get_observations()
+                # 获取完还是None，重置
+                # None一个是真的None，一个是里程计漂移，索引超限
+                if observations is None:
+                    is_observation_null = True
+                    print("因观测重置")
+                    break
+                next_position = None
+                action_index = None
+                is_node_select_null = False
+                try:
+                    next_position, action_index = self.select_node(observations)
+                except AttributeError:
+                    is_node_select_null = True
+                if is_node_select_null is True:
+                    is_observation_null = True
+                    print("因选点重置")
+                    break
+                self.save_observations(observations)
+                policy_center_frontier = self.select_closest_frontier(next_position)
+                # 经验池保存动作
+                self.save_action(action_index)
+                # print("nextposition:{} {}", next_position[0], next_position[1])
+                reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
+                    policy_center_frontier,
+                    next_position,
+                    self.travel_dist)
+                # 这里直接跳出会导致 经验池的尺寸出问题
+                # if reward < -10000:
+                #     break
+                # 在nbv异常终止的情况下，仅仅重启nbv不跳出
+                if no_nbv:
+                    reset_msg = Int8()
+                    reset_msg.data = 1
+                    self.reset_nbv_pub.publish(reset_msg)
+                    time.sleep(2)
+                    no_nbv = False
+                self.save_reward_done(reward, done)
+                print("reward:{}".format(reward))
+                observations = self.get_observations()
+                # 观测获取失败
+                if observations is None:
+                    break
+                self.save_next_observations(observations)
+                start_time = timeit.default_timer()
+                self.update_center_frontier = True
+                # 簇中心点不再出现
+                mutex = True
+                # 重启后仍然获取不到边界中心，跳出，重置环境后再次重启nbv
+                while self.update_center_frontier is True and mutex is True:
+                    end_time = timeit.default_timer()
+                    execution_time = end_time - start_time
+                    if execution_time > 5:
+                        # 重新唤醒nbv
+                        # 跳出循环
+                        print("超时，获取不到边界中心")
+                        no_nbv = True
+                        mutex = False
+                # plt.imshow(self.env.robot_belief, cmap='gray')
+                # plt.show()
+                # save a frame
+                if self.save_image:
+                    if not os.path.exists(gifs_path):
+                        os.makedirs(gifs_path)
+                    self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+
+                is_observation_null = False
+
+                # 判断是否出现了规划失败，不再判断
+                if done or no_nbv:
+                    break
 
         self.env.clear_trajectory()
         # save metrics
@@ -247,11 +288,16 @@ class Worker:
             self.make_gif(path, curr_episode)
         self.env.reset()
         # 重启nbv
-        if no_nbv is True:
-            reset_msg = Int8()
-            reset_msg.data = 1
-            self.reset_nbv_pub.publish(reset_msg)
-            time.sleep(2)
+        # if no_nbv is True:
+        #     reset_msg = Int8()
+        #     reset_msg.data = 1
+        #     self.reset_nbv_pub.publish(reset_msg)
+        #     time.sleep(2)
+        # 先不按照条件了，可能更稳定
+        reset_msg = Int8()
+        reset_msg.data = 1
+        self.env.reset_nbv_pub.publish(reset_msg)
+        time.sleep(3)
 
 
     def work(self, currEpisode):

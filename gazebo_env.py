@@ -152,6 +152,9 @@ class GazeboEnv:
         self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
         self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
         self.robot_belief = np.ones((384, 384)) * 127
+
+        # 连续规划失败基本是陷入了不可逆的困境
+        self.plan_filed_count = 0
         # flag均以锁的形式使用
         self.update_belief_flag = True
         self.update_position_flag = True
@@ -175,6 +178,7 @@ class GazeboEnv:
         rospy.init_node("gym", anonymous=True)
 
         # Set up the ROS publishers and subscribers
+        self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
         self.set_state = rospy.Publisher(
             "gazebo/set_model_state", ModelState, queue_size=10
@@ -248,7 +252,7 @@ class GazeboEnv:
         reverse_cmd = Twist()
         reverse_cmd.linear.x = -0.2  # 负线性速度表示后退
         self.vel_pub.publish(reverse_cmd)
-        time.sleep(1.0)
+        time.sleep(0.1)
         stop_cmd = Twist()
         self.vel_pub.publish(stop_cmd)
 
@@ -371,8 +375,15 @@ class GazeboEnv:
         while self.update_bbox_flag:
             pass
         # 等待更新机器人的状态
+        start_time_1 = timeit.default_timer()
         while self.robot_position is None or self.robot_belief is None or self.frontiers is None:
-            pass
+            end_time = timeit.default_timer()
+            if end_time - start_time_1 > 5:
+                # 先不按照条件了，可能更稳定
+                reset_msg = Int8()
+                reset_msg.data = 1
+                self.reset_nbv_pub.publish(reset_msg)
+                time.sleep(3)
         if self.plot:
             # initialize the route
             self.xPoints = [self.robot_position[0]]
@@ -471,7 +482,9 @@ class GazeboEnv:
         start_time = time.time()
         plan_failed = False
         while self.goal_arrive_flag is False:
-            if time.time() - start_time > 20:
+            # 加速之后规划路径变快
+            # if time.time() - start_time > 20:
+            if time.time() - start_time > 8:
                 # 规划失败，关闭导航状态检测
                 self.goal_cancel()
                 # print("规划失败")
@@ -482,9 +495,14 @@ class GazeboEnv:
                 plan_failed = True
                 # 后退一步
                 self.backward_step()
+                # 更改实验后好像不需要清除代价地图了，看看效果
                 # 清除代价地图
-                self.clear_cost_map()
+                # self.clear_cost_map()
+                self.plan_filed_count += 1
                 break
+        if plan_failed is False:
+            # 规划成功，清空
+            self.plan_filed_count = 0
         self.goal_arrive_flag = False
         # 关闭导航状态检测
         self.update_nav_status_flag = False
@@ -565,7 +583,7 @@ class GazeboEnv:
         # self.last_center_frontier = copy.deepcopy(self.center_policy_frontier)
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
         if done:
-            reward += 20  # a finishing reward
+            reward += 500  # a finishing reward
         #
         if plan_failed:
             reward -= 30  # plan failed reward
