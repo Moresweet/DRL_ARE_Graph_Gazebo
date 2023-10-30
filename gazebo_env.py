@@ -70,7 +70,8 @@ def check_continuous_zeros(map, current_x, current_y):
             if x < 0 or x >= map.shape[0] or y < 0 or y >= map.shape[1] or int(visited[x, y]) == 1:
                 continue
             visited[x, y] = 1
-            if map[x, y] == 0:
+            # 1为障碍占据
+            if map[x, y] == 1:
                 length = dfs_search(map, visited, x, y, left_range, right_range, up_range, bottom_range)
                 if length >= 3:
                     total_num_over_10 += 1
@@ -86,7 +87,7 @@ def dfs_search(map, visited_table, current_x, current_y, left, right, up, bottom
         for m in range(-2, 3):
             for n in range(-2, 3):
                 if 0 <= current_x + m < map.shape[0] and 0 <= current_y + n < map.shape[1]:
-                    if map[current_x + m, current_y + n] == 0 and visited_table[current_x + m, current_y + n] == 0:
+                    if map[current_x + m, current_y + n] == 1 and visited_table[current_x + m, current_y + n] == 0:
                         ret_nums += dfs_search(map, visited_table, current_x + m,
                                                current_y + n, left, right, up, bottom) + 1
         return ret_nums
@@ -110,7 +111,7 @@ def analyze_target_area(map, target_x, target_y):
             # 确保索引在合法范围内
             if 0 <= x < map.shape[0] and 0 <= y < map.shape[1]:
                 total_count += 1
-                if map[x, y] == 0:
+                if map[x, y] == 255:
                     zero_count += 1
 
     zero_percentage = zero_count / total_count * 100
@@ -155,6 +156,7 @@ class GazeboEnv:
 
         # 连续规划失败基本是陷入了不可逆的困境
         self.plan_filed_count = 0
+        self.move_plan_filed = False
         # flag均以锁的形式使用
         self.update_belief_flag = True
         self.update_position_flag = True
@@ -252,7 +254,7 @@ class GazeboEnv:
         reverse_cmd = Twist()
         reverse_cmd.linear.x = -0.2  # 负线性速度表示后退
         self.vel_pub.publish(reverse_cmd)
-        time.sleep(0.1)
+        time.sleep(0.5)
         stop_cmd = Twist()
         self.vel_pub.publish(stop_cmd)
 
@@ -352,6 +354,8 @@ class GazeboEnv:
                 if status.status == 3:  # status 3 表示导航成功完成
                     # print("导航成功")
                     self.goal_arrive_flag = True
+                elif status.status == 4: # status 4 表示规划失败
+                    self.move_plan_filed = True
         # else:
         #     print("获取导航状态禁用中")
 
@@ -367,6 +371,7 @@ class GazeboEnv:
     def update_robot_belief(self, robot_belief):
         self.old_robot_belief = robot_belief
         # 更新完告知地图回调，更新局部地图
+        time.sleep(2)
         self.update_belief_flag = True
 
     def begin(self):
@@ -481,29 +486,52 @@ class GazeboEnv:
         # 选择边界点的拷贝当前边界点(self.robot_position)，这个应该等到导航结束再行拷贝，否则会将中间点覆盖
         start_time = time.time()
         plan_failed = False
-        while self.goal_arrive_flag is False:
-            # 加速之后规划路径变快
-            # if time.time() - start_time > 20:
+        # while self.goal_arrive_flag is False:
+        #     # 加速之后规划路径变快
+        #     # if time.time() - start_time > 20:
+        #     if time.time() - start_time > 8:
+        #         # 规划失败，关闭导航状态检测
+        #         self.goal_cancel()
+        #         # print("规划失败")
+        #         self.update_nav_status_flag = False
+        #         # 规划失败后，是否重新获取定位呢，不用在这里，在reset里重置Gazebo后再获取
+        #         # travel_dist -= dist  # 不用减去
+        #         # return -100, False, self.robot_position, travel_dist
+        #         plan_failed = True
+        #         # 后退一步
+        #         self.backward_step()
+        #         # 更改实验后好像不需要清除代价地图了，看看效果
+        #         # 清除代价地图
+        #         # self.clear_cost_map()
+        #         self.plan_filed_count += 1
+        #         break
+
+        # 新方法，直接获取状态码
+        # 仍然需要超时保障
+        while self.goal_arrive_flag is False and self.move_plan_filed is False:
             if time.time() - start_time > 8:
-                # 规划失败，关闭导航状态检测
-                self.goal_cancel()
-                # print("规划失败")
-                self.update_nav_status_flag = False
-                # 规划失败后，是否重新获取定位呢，不用在这里，在reset里重置Gazebo后再获取
-                # travel_dist -= dist  # 不用减去
-                # return -100, False, self.robot_position, travel_dist
-                plan_failed = True
-                # 后退一步
-                self.backward_step()
-                # 更改实验后好像不需要清除代价地图了，看看效果
-                # 清除代价地图
-                # self.clear_cost_map()
-                self.plan_filed_count += 1
-                break
+                    # 规划失败，关闭导航状态检测
+                    self.goal_cancel()
+                    self.update_nav_status_flag = False
+                    plan_failed = True
+                    # 后退一步
+                    self.backward_step()
+                    self.plan_filed_count += 1
+                    break
+
+        if self.move_plan_filed:
+            self.goal_cancel()
+            self.update_nav_status_flag = False
+            plan_failed = True
+            self.backward_step()
+            self.plan_filed_count += 1
+
         if plan_failed is False:
             # 规划成功，清空
             self.plan_filed_count = 0
+
         self.goal_arrive_flag = False
+        self.move_plan_filed = False
         # 关闭导航状态检测
         self.update_nav_status_flag = False
         # robot_position = next_position 源码中是直接改变状态空间，因为不需要导航，所以此处应该是导航，并非直接进行赋值替换
@@ -523,6 +551,11 @@ class GazeboEnv:
         execution_time = end_time - start_time_1
         # print("更新位置信息成功，用时{}s,当前位置({},{})".format(execution_time, self.robot_position[0], self.robot_position[1]))
         # self.update_belief_flag = True # update_robot_belief方法已经作了这个工作
+        # 规划失败，但是没有进入条件
+        # if np.linalg.norm(self.robot_position - next_position) > 6:
+        #     self.goal_cancel()
+        #     plan_failed = True
+
         start_time_1 = timeit.default_timer()
         while self.update_belief_flag is True:
             pass
@@ -583,7 +616,7 @@ class GazeboEnv:
         # self.last_center_frontier = copy.deepcopy(self.center_policy_frontier)
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
         if done:
-            reward += 500  # a finishing reward
+            reward += 100  # a finishing reward
         #
         if plan_failed:
             reward -= 30  # plan failed reward
@@ -659,15 +692,15 @@ class GazeboEnv:
             # 奖励，鼓励，更大一点，趋近于发现目标
             alpha = 1.0 if score_policy_dist > 0 else -1.5
             pass
-        action_dist_score = alpha * dist / 38
+        # action_dist_score = alpha * dist / 38
         # score_policy_dist = - policy_dist / 64  # 这样会一直得到负奖励，不能起到引导作用
         # 采用当前点到下一视点到所选边界的距离差对于距离的占比来计算奖励
         # reward += delta_num / 60
         # 即使不需要边界发现值了，也需要设置
-        area_find_score = delta_num / 500
+        area_find_score = delta_num / 200
         # 还有一点就是两个选择的边界中心是不是会距离很远，根本难以匹配，所以最好还是障碍物语义应该在节点上，用节点去判断
         reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
-        reward += action_dist_score
+        # reward += action_dist_score
         reward += area_find_score
         reward += score_policy_dist
         # reward += area_find_score
