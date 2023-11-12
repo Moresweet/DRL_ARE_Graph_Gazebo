@@ -616,7 +616,7 @@ class GazeboEnv:
         # self.last_center_frontier = copy.deepcopy(self.center_policy_frontier)
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
         if done:
-            reward += 100  # a finishing reward
+            reward += 150  # a finishing reward
         #
         if plan_failed:
             reward -= 30  # plan failed reward
@@ -697,7 +697,7 @@ class GazeboEnv:
         # 采用当前点到下一视点到所选边界的距离差对于距离的占比来计算奖励
         # reward += delta_num / 60
         # 即使不需要边界发现值了，也需要设置
-        area_find_score = delta_num / 200
+        area_find_score = delta_num / 100
         # 还有一点就是两个选择的边界中心是不是会距离很远，根本难以匹配，所以最好还是障碍物语义应该在节点上，用节点去判断
         reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score

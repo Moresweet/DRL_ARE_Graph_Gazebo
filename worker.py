@@ -217,6 +217,7 @@ class Worker:
                     next_position, action_index = self.select_node(observations)
                 except AttributeError:
                     is_node_select_null = True
+                # 这种方式会出现脏经验
                 if is_node_select_null is True:
                     is_observation_null = True
                     print("因选点重置")
