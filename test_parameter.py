@@ -1,4 +1,4 @@
-INPUT_DIM = 4
+INPUT_DIM = 5
 EMBEDDING_DIM = 128
 K_SIZE = 20  # the number of neighbors
 

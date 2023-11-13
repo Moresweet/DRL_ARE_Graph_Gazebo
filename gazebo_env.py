@@ -242,13 +242,13 @@ class GazeboEnv:
         path = path_response.plan
         path_length = 0.0
         for i in range(1, len(path.poses)):
-            x1 = path.poses[i - 1].pose.position.x
-            y1 = path.poses[i - 1].pose.position.y
-            x2 = path.poses[i].pose.position.x
-            y2 = path.poses[i].pose.position.y
+            x1 = convert_map_pixel(path.poses[i - 1].pose.position.x)
+            y1 = convert_map_pixel(path.poses[i - 1].pose.position.y)
+            x2 = convert_map_pixel(path.poses[i].pose.position.x)
+            y2 = convert_map_pixel(path.poses[i].pose.position.y)
             segment_length = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
             path_length += segment_length
-        return path_length
+        return path_length, path.poses
 
     def backward_step(self):
         reverse_cmd = Twist()
@@ -474,7 +474,9 @@ class GazeboEnv:
     def step(self, policy_center_frontiers, next_position, travel_dist):
         self.center_policy_frontier = policy_center_frontiers
         # 此时的机器人位置是未导航之前的
-        dist = np.linalg.norm(next_position - self.robot_position)
+        # 修改dist计算方式
+        # dist = np.linalg.norm(next_position - self.robot_position)
+        dist, path_points = self.cal_path_plan_dist(self.robot_position, next_position)
         travel_dist += dist
         goal_x = convert_pixel_map(next_position[0])
         goal_y = convert_pixel_map(next_position[1])
@@ -586,6 +588,16 @@ class GazeboEnv:
         end_time = timeit.default_timer()
         execution_time = end_time - start_time_1
         # print("检测目标信息成功，用时{}s".format(execution_time))
+        # route添加方式变更
+        # self.graph_generator.route_node.append(self.robot_position)
+        # next_node_index = self.find_index_from_coords(self.robot_position)
+        # self.graph_generator.nodes_list[next_node_index].set_visited()
+        for i in range(len(path_points)):
+            current_point = np.array([path_points[i].pose.position.x, path_points[i].pose.position.y])
+            self.graph_generator.route_node.append(current_point)
+            next_node_index = self.find_index_from_coords(current_point)
+            self.graph_generator.nodes_list[next_node_index].set_visited()
+        # 最后再加上
         self.graph_generator.route_node.append(self.robot_position)
         next_node_index = self.find_index_from_coords(self.robot_position)
         self.graph_generator.nodes_list[next_node_index].set_visited()
@@ -666,15 +678,15 @@ class GazeboEnv:
         # score_policy_dist = (start2cfp - policy_dist) / np.linalg.norm(start_position - next_position)
         # 以上方式也是有问题的表达方式
 
-        path_length_start2cpf = self.cal_path_plan_dist(start_position, policy_center_frontiers)
-        path_length_position2cpf = self.cal_path_plan_dist(self.robot_position, policy_center_frontiers)
-        path_length_start2next = self.cal_path_plan_dist(start_position, next_position)
+        path_length_start2cpf, _ = self.cal_path_plan_dist(start_position, policy_center_frontiers)
+        path_length_position2cpf, _ = self.cal_path_plan_dist(self.robot_position, policy_center_frontiers)
+        path_length_start2next, _ = self.cal_path_plan_dist(start_position, next_position)
         if path_length_start2next == 0:
             score_policy_dist = 0
         else:
             score_policy_dist = (path_length_start2cpf - path_length_position2cpf) / path_length_start2next
         if score_policy_dist <= 0.15:
-            score_policy_dist = score_policy_dist - 1
+            score_policy_dist = (score_policy_dist - 1) * 5
         alpha = 0.0
         if is_current_cluster is True and is_target_free is True:
             # 惩罚，容易撞
