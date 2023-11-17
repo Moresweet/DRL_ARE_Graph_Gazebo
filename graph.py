@@ -23,6 +23,30 @@ class Graph:
 
         from_node_edges[to_node] = edge
 
+    def get_adjacent_nodes(self, node):
+        if node in self.edges:
+            # return list(int(self.edges[node].keys()))
+            return [int(key) for key in self.edges[node].keys()]
+        else:
+            return []
+
+    def get_nearest_nodes(self, start_node, search_nums=3):
+        visited = set()
+        result = []
+
+        def dfs(current_node, depth=0):
+            visited.add(current_node)
+            result.append(current_node)
+
+            adjacent_nodes = self.get_adjacent_nodes(current_node)
+            # for neighbor in adjacent_nodes[:3]:  # 取邻近的3个节点
+            for neighbor in adjacent_nodes:
+                if neighbor not in visited and depth < search_nums:
+                    dfs(neighbor, depth + 1)
+
+        dfs(start_node, 0)
+        return result[2:]  # 排除起始节点，返回邻近的3个节点
+
     def clear_edge(self, from_node):
         if from_node in self.edges:
             self.edges[from_node] = dict()

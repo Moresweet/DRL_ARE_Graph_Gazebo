@@ -150,6 +150,9 @@ class GazeboEnv:
         self.last_object = copy.deepcopy(self.policy_object)
         self.bbox_detect_object = np.zeros([6, 1]) * 0
         self.bbox_detect_area = np.full((6, 2, 2), np.inf)
+        # 为了使每次的观测是完全的，检测目标使用数组的形式
+        self.bbox_detect_array = []
+        self.bbox_area_array = []
         self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
         self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
         self.robot_belief = np.ones((384, 384)) * 127
@@ -162,7 +165,8 @@ class GazeboEnv:
         self.update_position_flag = True
         # 获取导航标志需要与目标到达情况配合使用
         self.update_nav_status_flag = False
-        self.update_bbox_flag = False
+        # 一直检测
+        # self.update_bbox_flag = False
         # 是否有目标也要单独拉出来使用
         self.bbox_having_flag = False
         self.update_frontier_flag = True
@@ -324,25 +328,29 @@ class GazeboEnv:
 
     def box_array_callback(self, msg):
         # 目标不一定有，所以只检测一次，即使没有也关闭检测
-        if self.update_bbox_flag is True:
-            if msg.boxes is not None:
-                self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
-                self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
-                # 每个step都有可能出现新目标
-                self.bbox_detect_object = np.zeros([6, 1]) * 0
-                self.bbox_detect_area = np.full((6, 2, 2), np.inf)
-                if len(msg.boxes) != 0:
-                    self.bbox_having_flag = True
-                    for bbox in msg.boxes:
-                        print("发现目标")
-                        bbox_x_center = convert_map_pixel(bbox.pose.position.x)
-                        bbox_y_center = convert_map_pixel(bbox.pose.position.y)
-                        bbox_x_length = bbox.dimensions.x / 0.05
-                        bbox_y_length = bbox.dimensions.y / 0.05
-                        self.bbox_detect_object[bbox.label] = 1
-                        self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
-                                                                      (bbox_x_length, bbox_y_length)])
-            self.update_bbox_flag = False
+        # if self.update_bbox_flag is True:
+        if msg.boxes is not None:
+            # 是否存档匹配需要用条件卡一卡
+            self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
+            self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
+            # 每个step都有可能出现新目标
+            self.bbox_detect_object = np.zeros([6, 1]) * 0
+            self.bbox_detect_area = np.full((6, 2, 2), np.inf)
+            if len(msg.boxes) != 0:
+                self.bbox_having_flag = True
+                for bbox in msg.boxes:
+                    # print("发现目标")
+                    bbox_x_center = convert_map_pixel(bbox.pose.position.x)
+                    bbox_y_center = convert_map_pixel(bbox.pose.position.y)
+                    bbox_x_length = bbox.dimensions.x / 0.05
+                    bbox_y_length = bbox.dimensions.y / 0.05
+                    self.bbox_detect_object[bbox.label] = 1
+                    self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
+                                                                  (bbox_x_length, bbox_y_length)])
+                    # 加入数组，批量更新
+                    self.bbox_detect_array.append(self.bbox_detect_object)
+                    self.bbox_area_array.append(self.bbox_detect_area)
+            # self.update_bbox_flag = False
 
     def goal_arrive_callback(self, goal_status):
         # self.goal_arrive_flag = False
@@ -376,9 +384,10 @@ class GazeboEnv:
 
     def begin(self):
         # 检测一下目标
-        self.update_bbox_flag = True
-        while self.update_bbox_flag:
-            pass
+        # 一直开启检测
+        # self.update_bbox_flag = True
+        # while self.update_bbox_flag:
+        #     pass
         # 等待更新机器人的状态
         start_time_1 = timeit.default_timer()
         while self.robot_position is None or self.robot_belief is None or self.frontiers is None:
@@ -581,12 +590,13 @@ class GazeboEnv:
         execution_time = end_time - start_time_1
         # print("更新边界信息成功，用时{}s".format(execution_time))
         # 检测目标的存在性
-        self.update_bbox_flag = True
-        start_time_1 = timeit.default_timer()
-        while self.update_bbox_flag is True:
-            pass
-        end_time = timeit.default_timer()
-        execution_time = end_time - start_time_1
+        # 一直开启，手动判断
+        # self.update_bbox_flag = True
+        # start_time_1 = timeit.default_timer()
+        # while self.update_bbox_flag is True:
+        #     pass
+        # end_time = timeit.default_timer()
+        # execution_time = end_time - start_time_1
         # print("检测目标信息成功，用时{}s".format(execution_time))
         # route添加方式变更
         # self.graph_generator.route_node.append(self.robot_position)
@@ -607,9 +617,12 @@ class GazeboEnv:
         # 计算奖励，考虑语义目标相关性的分数，鼓励靠近选择的边界点
         # update the graph
         # 注意边界的用处，因为我们的边界是确定的
+        # self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.update_graph(
+        #     self.robot_position, self.robot_belief, self.old_robot_belief, self.frontiers, self.observed_frontiers,
+        #     self.bbox_detect_object, self.bbox_detect_area, self.bbox_having_flag)
         self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.update_graph(
             self.robot_position, self.robot_belief, self.old_robot_belief, self.frontiers, self.observed_frontiers,
-            self.bbox_detect_object, self.bbox_detect_area, self.bbox_having_flag)
+            self.bbox_detect_array, self.bbox_area_array, self.bbox_having_flag)
         # 重置标志位
         self.bbox_having_flag = False
         # 在begin中初始化
@@ -722,12 +735,63 @@ class GazeboEnv:
     def match_object_score(self):
         # 计算当前策略选择簇中心最近的上一次的簇中心语义向量，如果两个簇中心距离足够近则匹配加分
         # 计算匹配的关系数量
-        matching_count = np.sum(
-            np.logical_and(self.last_detect_object, self.bbox_detect_object) * self.object_dist_matrix)
-        if matching_count != 0:
-            print("有语义得分")
-            print(self.last_detect_object)
-            print(self.bbox_detect_object)
+        # matching_count = np.sum(
+        #     np.logical_and(self.last_detect_object, self.bbox_detect_object) * self.object_dist_matrix)
+        new_coords = self.graph_generator.new_node_coords
+        # 转换新坐标系到index
+        new_index = [self.find_index_from_coords(coord) for coord in new_coords]
+        # 转换全局坐标系到index
+        global_index = [self.find_index_from_coords(coord) for coord in self.node_coords]
+        # 作差获得旧坐标系
+        old_area_index = list(set(new_index) - set(global_index)) + list(set(global_index) - set(new_index))
+        # 将索引扩张一圈，保证连通的探索
+        expanded_indices = []
+        for index in new_index:
+            x, y = index // 30, index % 30  # 计算当前索引的坐标
+            for i in range(-3, 4):  # 扩张一圈
+                for j in range(-3, 4):
+                    new_x, new_y = x + i, y + j
+                    cal_index = new_x * 30 + new_y
+                    expanded_indices.append(cal_index)
+        # 去重，筛选合法索引
+        expanded_indices[:] = list(set([x for x in expanded_indices if x in global_index]))
+        # new_index = expanded_indices
+        # 遍历新坐标中的目标语义，检测到后搜索旧区域中在辐射范围内的语义目标，查看匹配关系计算奖励得分
+        new_object = None
+        observed_object = None
+        matching_count = 0
+        visited_object = []
+        # 外扩之后，节点的object_value还是原来的值，这样比较可能没有意义
+        current_object_value = [self.object_value[index] for index in new_index if self.object_value[index] != 0]
+        if len(current_object_value) == 0:
+            current_object_value = 0
+        else:
+            current_object_value = current_object_value[0]
+        for node in expanded_indices:
+            # current_object_value = self.graph_generator.object_value[node]
+            if current_object_value != 0 and current_object_value not in visited_object:
+                observed_index = self.graph_generator.graph.get_nearest_nodes(str(node))
+                # 找到连通点
+                if len(observed_index) == 0:
+                    continue
+                # 有match在屏蔽掉
+                # visited_object.append(current_object_value)
+                new_object = number_to_one_hot(current_object_value)
+                # 剔除在新区域中的点
+                observed_index = [x for x in observed_index if x not in new_index]
+                # 筛选出observed_index中的非零权值
+                observed_nonzero_values = [self.object_value[index] for index in observed_index if self.object_value[index] != 0]
+                for value in observed_nonzero_values:
+                    observed_object = number_to_one_hot(value)
+                    # matching_count += np.sum(
+                    #     np.logical_and(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
+                    matching_count += np.sum(
+                        np.dot(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
+                    if matching_count != 0:
+                        visited_object.append(current_object_value)
+                        print("有语义得分")
+                        print(new_object)
+                        print(observed_object)
         return matching_count
 
     def reset(self):
@@ -809,9 +873,9 @@ class GazeboEnv:
         plt.cla()
         plt.imshow(self.robot_belief, cmap='gray')
         plt.axis((0, 384, 384, 0))
-        for i in range(len(self.graph_generator.x)):
-            plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
-                     zorder=1)  # plot edges will take long time
+        # for i in range(len(self.graph_generator.x)):
+        #     plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
+        #              zorder=1)  # plot edges will take long time
         plt.scatter(self.node_coords[:, 0], self.node_coords[:, 1], c=self.node_utility, zorder=5)
         object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
         object_coords = np.array(object_coords)

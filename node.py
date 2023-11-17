@@ -10,7 +10,8 @@ def one_hot_to_primes(one_hot_vector):
         if one_hot_vector[i] == 1:
             selected_primes.append(primes[i])
             product *= primes[i]
-
+    if product == 1:
+        product = 0
     return product
 
 

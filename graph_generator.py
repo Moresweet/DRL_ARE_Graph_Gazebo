@@ -11,6 +11,8 @@ class Graph_generator:
         self.k_size = k_size
         self.graph = Graph()
         self.node_coords = None
+        # 添加节点新发现边界点
+        self.new_node_coords = None
         self.plot = plot
         self.x = []
         self.y = []
@@ -115,6 +117,7 @@ class Graph_generator:
         uniform_points_to_check = self.uniform_points[:, 0] + self.uniform_points[:, 1] * 1j
         _, _, candidate_indices = np.intersect1d(free_area_to_check, uniform_points_to_check, return_indices=True)
         new_node_coords = self.uniform_points[candidate_indices]
+        self.new_node_coords = copy.deepcopy(new_node_coords)
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords))
 
@@ -163,11 +166,18 @@ class Graph_generator:
         for i, coords in enumerate(self.node_coords):
             utility = self.nodes_list[i].utility
             self.node_utility.append(utility)
-            if bbox_having_flag is True:
-                is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector, object_area)
-                # 更新检测到的目标向量
-                if is_update_object is True:
-                    self.nodes_list[i].set_object_value(current_node_one_hot)
+            # if bbox_having_flag is True:
+            #     is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector, object_area)
+            #     # 更新检测到的目标向量
+            #     if is_update_object is True:
+            #         self.nodes_list[i].set_object_value(current_node_one_hot)
+            # 采用数组遍历的方式
+            for object_index in range(len(object_vector)):
+                if bbox_having_flag is True:
+                    is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector[object_index], object_area[object_index])
+                    # 更新检测到的目标向量
+                    if is_update_object is True:
+                        self.nodes_list[i].set_object_value(current_node_one_hot)
             self.object_value.append([self.nodes_list[i].object_value])
             # self.object_value = np.concatenate([self.object_value, np.array([[node.object_value]])])
         self.node_utility = np.array(self.node_utility)

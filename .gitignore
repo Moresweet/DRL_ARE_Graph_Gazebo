@@ -1,3 +1,6 @@
 /gifs/
 /model/ae_clean/
 /train/ae_clean/
+/parameter.py
+/test_parameter.py
+
