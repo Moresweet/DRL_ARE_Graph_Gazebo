@@ -18,6 +18,8 @@ def one_hot_to_primes(one_hot_vector):
 def number_to_one_hot(number):
     primes = [3, 5, 7, 11, 13, 17]
     one_hot_vector = [0] * len(primes)
+    if number == 1:
+        return one_hot_vector
 
     factors = []
 

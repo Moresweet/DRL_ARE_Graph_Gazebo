@@ -24,5 +24,5 @@ FOLDER_NAME = 'ae_clean'
 model_path = f'model/{FOLDER_NAME}'
 train_path = f'train/{FOLDER_NAME}'
 gifs_path = f'gifs/{FOLDER_NAME}'
-LOAD_MODEL = True  # do you want to load the model trained before
+LOAD_MODEL = False  # do you want to load the model trained before
 SAVE_IMG_GAP = 100

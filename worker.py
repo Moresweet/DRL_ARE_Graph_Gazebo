@@ -77,12 +77,15 @@ class Worker:
 
         # normalize observations
         node_coords = node_coords / 384
-        node_utility = node_utility / 50
+        node_utility = node_utility / 120
+        # 6类，最大到19
+        object_value = object_value / 19
 
         # transfer to node inputs tensor
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape((n_nodes, 1))
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost, object_value), axis=1)
+        node_object_value_inputs = object_value.reshape((n_nodes, 1))
+        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost, node_object_value_inputs), axis=1)
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
 
         # padding the number of node to a given node padding size
@@ -96,12 +99,24 @@ class Worker:
             self.device)
         node_padding_mask = torch.cat((node_padding_mask, node_padding), dim=-1)
 
-        # get the node index of the current robot position
-        current_node_index = self.env.find_index_from_coords(self.robot_position)
-        current_index = torch.tensor([current_node_index]).unsqueeze(0).unsqueeze(0).to(self.device)  # (1,1,1)
-
         # prepare the adjacent list as padded edge inputs and the adjacent matrix as the edge mask
         graph = list(graph.values())
+
+        # get the node index of the current robot position
+        current_node_index = self.env.find_index_from_coords(self.robot_position)
+        try:
+            # 防止悬空节点的选择导致回原点
+            if len(graph[current_node_index]) <= 1:
+                distances = np.linalg.norm(self.env.node_coords - self.robot_position, axis=1)
+                indices = np.where(distances < np.sort(distances))[0]
+                for sub_index in indices:
+                    if len(graph[sub_index]) > 1:
+                        current_node_index = sub_index
+                        break
+        except IndexError:
+            return None
+        current_index = torch.tensor([current_node_index]).unsqueeze(0).unsqueeze(0).to(self.device)  # (1,1,1)
+
         edge_inputs = []
         for node in graph:
             node_edges = list(map(int, node))
@@ -241,13 +256,6 @@ class Worker:
                     self.reset_nbv_pub.publish(reset_msg)
                     time.sleep(2)
                     no_nbv = False
-                self.save_reward_done(reward, done)
-                print("reward:{}".format(reward))
-                observations = self.get_observations()
-                # 观测获取失败
-                if observations is None:
-                    break
-                self.save_next_observations(observations)
                 start_time = timeit.default_timer()
                 self.update_center_frontier = True
                 # 簇中心点不再出现
@@ -262,6 +270,16 @@ class Worker:
                         print("超时，获取不到边界中心")
                         no_nbv = True
                         mutex = False
+                if no_nbv is True and self.env.explored_area > 0.95:
+                    done = True
+                    reward += 150
+                self.save_reward_done(reward, done)
+                print("reward:{}".format(reward))
+                observations = self.get_observations()
+                # 观测获取失败
+                if observations is None:
+                    break
+                self.save_next_observations(observations)
                 # plt.imshow(self.env.robot_belief, cmap='gray')
                 # plt.show()
                 # save a frame
@@ -273,6 +291,7 @@ class Worker:
                 is_observation_null = False
 
                 # 判断是否出现了规划失败，不再判断
+                # 这里只负责跳出，修改值没有用，因为已经保存了
                 if done or no_nbv:
                     break
 

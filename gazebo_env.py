@@ -623,14 +623,14 @@ class GazeboEnv:
         self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.update_graph(
             self.robot_position, self.robot_belief, self.old_robot_belief, self.frontiers, self.observed_frontiers,
             self.bbox_detect_array, self.bbox_area_array, self.bbox_having_flag)
-        # 重置标志位
-        self.bbox_having_flag = False
         # 在begin中初始化
         # self.observed_frontiers = copy.deepcopy(self.frontiers)
         # 边界不用传了，上一次观测的边界已经记录在了self.observed中，self.froniters也已经更新
         reward, object_reward = self.calculate_reward(dist, self.policy_object, policy_center_frontiers, next_position,
                                                       start_position,
                                                       travel_dist)
+        # 重置标志位
+        self.bbox_having_flag = False
         done = self.check_done()
         if self.plot:
             self.xPoints.append(self.robot_position[0])
@@ -658,6 +658,12 @@ class GazeboEnv:
         index = np.argmin(np.linalg.norm(self.node_coords - position, axis=1))
         return index
 
+    def find_expand_index(self, position):
+        distances = np.linalg.norm(self.node_coords - position, axis=1)
+        # 9个点，包括自己、上下左右左上左下右上右下
+        indices = np.where(distances < np.sort(distances)[9])[0]
+        return indices[1:]
+
     def calculate_reward(self, dist, object_vector, policy_center_frontiers, next_position, start_position,
                          travel_dist):
         reward = 0
@@ -676,8 +682,11 @@ class GazeboEnv:
         if delta_num < 300:
             delta_num = 0
 
+        score = 0
         # 计算语义目标关系得分
-        score = self.match_object_score() * 20
+        # 加条件防止封界抖动时的情况，重复匹配现象
+        if self.bbox_having_flag is True:
+            score = self.match_object_score() * 20
         # 计算与选择的边界簇中心距离，引导机器人靠近选择的边界中心
         # 簇中心选择的好坏需要任务的完成情况得分来评判，毕竟簇中心的选择是策略的输出
         # self.robot_postion 是已经导航完毕的机器人所在点
@@ -746,13 +755,22 @@ class GazeboEnv:
         old_area_index = list(set(new_index) - set(global_index)) + list(set(global_index) - set(new_index))
         # 将索引扩张一圈，保证连通的探索
         expanded_indices = []
+        # 加入一张临时表
+        tmp_table = copy.deepcopy(self.object_value)
         for index in new_index:
-            x, y = index // 30, index % 30  # 计算当前索引的坐标
-            for i in range(-3, 4):  # 扩张一圈
-                for j in range(-3, 4):
-                    new_x, new_y = x + i, y + j
-                    cal_index = new_x * 30 + new_y
-                    expanded_indices.append(cal_index)
+            tmp_index = self.find_expand_index(self.node_coords[index])
+            for element in tmp_index:
+                expanded_indices.append(element)
+                # 同步修改
+                if tmp_table[element] == 0:
+                    tmp_table[element] = tmp_table[index]
+        # for index in new_index:
+        #     x, y = index // 30, index % 30  # 计算当前索引的坐标
+        #     for i in range(-1, 2):  # 扩张一圈
+        #         for j in range(-1, 2):
+        #             new_x, new_y = x + i, y + j
+        #             cal_index = new_x * 30 + new_y
+        #             expanded_indices.append(cal_index)
         # 去重，筛选合法索引
         expanded_indices[:] = list(set([x for x in expanded_indices if x in global_index]))
         # new_index = expanded_indices
@@ -762,13 +780,15 @@ class GazeboEnv:
         matching_count = 0
         visited_object = []
         # 外扩之后，节点的object_value还是原来的值，这样比较可能没有意义
-        current_object_value = [self.object_value[index] for index in new_index if self.object_value[index] != 0]
-        if len(current_object_value) == 0:
-            current_object_value = 0
-        else:
-            current_object_value = current_object_value[0]
+        # current_object_value = [self.object_value[index] for index in new_index if self.object_value[index] != 0]
+        # if len(current_object_value) == 0:
+        #     current_object_value = 0
+        # else:
+        #     current_object_value = current_object_value[0]
+        # 难以分辨到底谁是谁扩张出来的
         for node in expanded_indices:
-            # current_object_value = self.graph_generator.object_value[node]
+            # 已经使用了临时表，这样应该可以完美匹配到
+            current_object_value = tmp_table[node]
             if current_object_value != 0 and current_object_value not in visited_object:
                 observed_index = self.graph_generator.graph.get_nearest_nodes(str(node))
                 # 找到连通点
@@ -776,19 +796,26 @@ class GazeboEnv:
                     continue
                 # 有match在屏蔽掉
                 # visited_object.append(current_object_value)
-                new_object = number_to_one_hot(current_object_value)
+                new_object = number_to_one_hot(current_object_value[0])
                 # 剔除在新区域中的点
                 observed_index = [x for x in observed_index if x not in new_index]
                 # 筛选出observed_index中的非零权值
                 observed_nonzero_values = [self.object_value[index] for index in observed_index if self.object_value[index] != 0]
+                # 多次匹配问题，一种类型匹配一次就够了
+                # observed_nonzero_values = list(set(observed_nonzero_values))
+                unique_list = []
+                for x in observed_nonzero_values:
+                    if x not in unique_list:
+                        unique_list.append(x)
+                observed_nonzero_values = unique_list
                 for value in observed_nonzero_values:
-                    observed_object = number_to_one_hot(value)
+                    observed_object = number_to_one_hot(value[0])
                     # matching_count += np.sum(
                     #     np.logical_and(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
                     matching_count += np.sum(
                         np.dot(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
                     if matching_count != 0:
-                        visited_object.append(current_object_value)
+                        visited_object.append(current_object_value[0])
                         print("有语义得分")
                         print(new_object)
                         print(observed_object)
@@ -842,11 +869,12 @@ class GazeboEnv:
         #     ("sofa", "sofa"): 1
         # }
         relations = {
-            ("desk", "sofa"): 1,
             ("chair_breakfast", "table_breakfast"): 1,
             ("desk", "chair_office"): 1,
+            ("chair_office", "chair_office"): 1,
             ("desk", "desk"): 1,
-            ("sofa", "sofa"): 1
+            ("sofa", "sofa"): 1,
+            ("table", "sofa"): 1
         }
 
         # 填充关系矩阵
