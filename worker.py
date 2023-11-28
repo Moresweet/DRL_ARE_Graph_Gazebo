@@ -270,7 +270,7 @@ class Worker:
                         print("超时，获取不到边界中心")
                         no_nbv = True
                         mutex = False
-                if no_nbv is True and self.env.explored_area > 0.95:
+                if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                     done = True
                     reward += 150
                 self.save_reward_done(reward, done)
