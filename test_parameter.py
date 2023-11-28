@@ -1,4 +1,4 @@
-INPUT_DIM = 5
+INPUT_DIM = 4
 EMBEDDING_DIM = 128
 K_SIZE = 20  # the number of neighbors
 
@@ -14,7 +14,7 @@ length_path = f'results/length'
 
 # NUM_TEST = 100
 NUM_RUN = 1
-NUM_TEST = 100
+NUM_TEST = 10
 SAVE_GIFS = True  # do you want to save GIFs
-SAVE_TRAJECTORY = False  # do you want to save per-step metrics
+SAVE_TRAJECTORY = True  # do you want to save per-step metrics
 SAVE_LENGTH = False  # do you want to save per-episode metrics

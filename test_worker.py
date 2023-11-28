@@ -1,5 +1,6 @@
 import timeit
-from datetime import time
+import time
+# from datetime import time
 
 import imageio
 import csv
@@ -40,6 +41,7 @@ class TestWorker:
         )
         self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.update_center_frontier = True
+        self.exploration_time = []
 
     def select_closest_frontier(self, next_position):
         while self.update_center_frontier is True:
@@ -64,15 +66,27 @@ class TestWorker:
         done = False
 
         observations = self.get_observations()
+        self.exploration_time = []
         for i in range(30):
             next_position, action_index = self.select_node(observations)
 
             policy_center_frontier = self.select_closest_frontier(next_position)
 
+            start_time = rospy.Time.now()
             reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
                 policy_center_frontier,
                 next_position,
                 self.travel_dist)
+            end_time = rospy.Time.now()
+            time_elapsed = end_time - start_time
+            time_elapsed_sec = time_elapsed.to_sec()
+            self.exploration_time.append(time_elapsed_sec)
+            if no_nbv:
+                reset_msg = Int8()
+                reset_msg.data = 1
+                self.reset_nbv_pub.publish(reset_msg)
+                time.sleep(2)
+                no_nbv = False
 
             observations = self.get_observations()
 
@@ -89,18 +103,22 @@ class TestWorker:
                     no_nbv = True
                     mutex = False
 
+            if no_nbv is True and self.env.explored_area > 0.95 and done is False:
+                done = True
+                reward += 150
+
             # save evaluation data
             if SAVE_TRAJECTORY:
                 if not os.path.exists(trajectory_path):
                     os.makedirs(trajectory_path)
                 csv_filename = f'results/trajectory/ours_trajectory_result.csv'
                 new_file = False if os.path.exists(csv_filename) else True
-                field_names = ['dist', 'area']
+                field_names = ['dist', 'area', 'time']
                 with open(csv_filename, 'a') as csvfile:
                     writer = csv.writer(csvfile)
                     if new_file:
                         writer.writerow(field_names)
-                    csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255)]).reshape(1, -1)
+                    csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255), time_elapsed_sec]).reshape(1, -1)
                     writer.writerows(csv_data)
 
             # save a frame
@@ -109,13 +127,7 @@ class TestWorker:
                     os.makedirs(gifs_path)
                 self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
 
-            if done:
-                break
-            elif no_nbv:
-                reset_msg = Int8()
-                reset_msg.data = 1
-                self.reset_nbv_pub.publish(reset_msg)
-                time.sleep(2)
+            if done or no_nbv:
                 break
 
         self.perf_metrics['travel_dist'] = self.travel_dist
@@ -142,6 +154,10 @@ class TestWorker:
             path = gifs_path
             self.make_gif(path, curr_episode)
         self.env.reset()
+        reset_msg = Int8()
+        reset_msg.data = 1
+        self.env.reset_nbv_pub.publish(reset_msg)
+        time.sleep(3)
 
     def get_observations(self):
         # get observations
@@ -155,13 +171,15 @@ class TestWorker:
 
         # normalize observations
         node_coords = node_coords / 384
-        node_utility = node_utility / 50
+        node_utility = node_utility / 120
+        # 6类，最大到19
+        object_value = object_value / 19
 
         # transfer to node inputs tensor
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape((n_nodes, 1))
         # 对齐维度
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost, object_value), axis=1)
+        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost), axis=1)
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
 
         # calculate a mask for padded node
