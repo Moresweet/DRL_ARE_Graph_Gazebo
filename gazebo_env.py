@@ -736,7 +736,7 @@ class GazeboEnv:
         reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score
         reward += area_find_score
-        reward += score_policy_dist
+        # reward += score_policy_dist
         # reward += area_find_score
         # reward += - dist / 38
         return reward, score
@@ -901,9 +901,9 @@ class GazeboEnv:
         plt.cla()
         plt.imshow(self.robot_belief, cmap='gray')
         plt.axis((0, 384, 384, 0))
-        # for i in range(len(self.graph_generator.x)):
-        #     plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
-        #              zorder=1)  # plot edges will take long time
+        for i in range(len(self.graph_generator.x)):
+            plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
+                     zorder=1)  # plot edges will take long time
         plt.scatter(self.node_coords[:, 0], self.node_coords[:, 1], c=self.node_utility, zorder=5)
         object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
         object_coords = np.array(object_coords)

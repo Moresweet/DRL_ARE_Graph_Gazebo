@@ -94,8 +94,11 @@ class MultiHeadAttention(nn.Module):
 
         U = self.norm_factor * torch.matmul(Q, K.transpose(2, 3))  # n_heads*batch_size*n_query*targets_size
 
-        if attn_mask is not None:
-            attn_mask = attn_mask.view(1, n_batch, n_query, n_key).expand_as(U)
+        try:
+            if attn_mask is not None:
+                attn_mask = attn_mask.view(1, n_batch, n_query, n_key).expand_as(U)
+        except RuntimeError:
+            print("error")
 
         if key_padding_mask is not None:
             key_padding_mask = key_padding_mask.repeat(1, n_query, 1)

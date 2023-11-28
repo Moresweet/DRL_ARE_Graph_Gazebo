@@ -17,4 +17,4 @@ NUM_RUN = 1
 NUM_TEST = 10
 SAVE_GIFS = True  # do you want to save GIFs
 SAVE_TRAJECTORY = True  # do you want to save per-step metrics
-SAVE_LENGTH = False  # do you want to save per-episode metrics
+SAVE_LENGTH = True  # do you want to save per-episode metrics

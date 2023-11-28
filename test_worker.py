@@ -225,6 +225,7 @@ class TestWorker:
 
         next_node_index = edge_inputs[0, 0, action_index.item()]
         next_position = self.env.node_coords[next_node_index]
+        print(next_position)
 
         return next_position, action_index
 

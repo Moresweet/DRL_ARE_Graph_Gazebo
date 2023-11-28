@@ -120,6 +120,8 @@ class Graph_generator:
         self.new_node_coords = copy.deepcopy(new_node_coords)
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords))
+        # 防止重复
+        self.node_coords = np.unique(self.node_coords, axis=0)
 
         # update the collision free graph
         # for coords in new_node_coords:
@@ -242,7 +244,7 @@ class Graph_generator:
         distances, indices = knn.kneighbors(X)
 
         # 膨胀障碍物
-        inf_robot_belief = self.inflation_robot_belief(robot_belief, radius=8)
+        # inf_robot_belief = self.inflation_robot_belief(robot_belief, radius=8)
 
         # 对于i节点丢失的bug进行重建模
         while True:
@@ -251,7 +253,7 @@ class Graph_generator:
                     start = p
                     end = neighbour
                     # if not self.check_collision(start, end, robot_belief):
-                    if not self.check_collision(start, end, inf_robot_belief):
+                    if not self.check_collision(start, end, robot_belief):
                         a = str(self.find_index_from_coords(node_coords, p))
                         b = str(self.find_index_from_coords(node_coords, neighbour))
                         self.graph.add_node(a)
@@ -260,6 +262,8 @@ class Graph_generator:
                         if self.plot:
                             self.x.append([p[0], neighbour[0]])
                             self.y.append([p[1], neighbour[1]])
+                    # else:
+                    #     print(str(self.find_index_from_coords(node_coords, p)))
             if len(self.graph.edges) == len(self.graph.nodes):
                 break
             print("节点丢失，重新更新")
