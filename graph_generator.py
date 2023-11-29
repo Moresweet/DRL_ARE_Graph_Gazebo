@@ -120,6 +120,8 @@ class Graph_generator:
         self.new_node_coords = copy.deepcopy(new_node_coords)
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords))
+        # 防止重复
+        self.node_coords = np.unique(self.node_coords, axis=0)
 
         # update the collision free graph
         # for coords in new_node_coords:
