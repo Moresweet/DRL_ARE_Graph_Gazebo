@@ -67,7 +67,7 @@ class TestWorker:
 
         observations = self.get_observations()
         self.exploration_time = []
-        for i in range(30):
+        for i in range(120):
             next_position, action_index = self.select_node(observations)
 
             policy_center_frontier = self.select_closest_frontier(next_position)
@@ -187,6 +187,17 @@ class TestWorker:
 
         # get the node index of the current robot position
         current_node_index = self.env.find_index_from_coords(self.robot_position)
+        try:
+            # 防止悬空节点的选择导致回原点
+            if len(graph[str(current_node_index)]) <= 1:
+                distances = np.linalg.norm(self.env.node_coords - self.robot_position, axis=1)
+                indices = np.where(distances < np.sort(distances))[0]
+                for sub_index in indices:
+                    if len(graph[str(sub_index)]) > 1:
+                        current_node_index = sub_index
+                        break
+        except IndexError:
+            return None
         current_index = torch.tensor([current_node_index]).unsqueeze(0).unsqueeze(0).to(self.device)  # (1,1,1)
 
         # prepare the adjacent list as padded edge inputs and the adjacent matrix as the edge mask
