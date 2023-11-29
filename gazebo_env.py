@@ -526,7 +526,7 @@ class GazeboEnv:
                     self.update_nav_status_flag = False
                     plan_failed = True
                     # 后退一步
-                    self.backward_step()
+                    # self.backward_step()
                     self.plan_filed_count += 1
                     break
 
@@ -534,7 +534,7 @@ class GazeboEnv:
             self.goal_cancel()
             self.update_nav_status_flag = False
             plan_failed = True
-            self.backward_step()
+            # self.backward_step()
             self.plan_filed_count += 1
 
         if plan_failed is False:

@@ -244,7 +244,7 @@ class Graph_generator:
         distances, indices = knn.kneighbors(X)
 
         # 膨胀障碍物
-        # inf_robot_belief = self.inflation_robot_belief(robot_belief, radius=8)
+        inf_robot_belief = self.inflation_robot_belief(robot_belief, radius=8)
 
         # 对于i节点丢失的bug进行重建模
         while True:
@@ -253,7 +253,7 @@ class Graph_generator:
                     start = p
                     end = neighbour
                     # if not self.check_collision(start, end, robot_belief):
-                    if not self.check_collision(start, end, robot_belief):
+                    if not self.check_collision(start, end, inf_robot_belief):
                         a = str(self.find_index_from_coords(node_coords, p))
                         b = str(self.find_index_from_coords(node_coords, neighbour))
                         self.graph.add_node(a)
