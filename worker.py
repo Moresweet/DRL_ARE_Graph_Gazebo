@@ -273,6 +273,10 @@ class Worker:
                 if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                     done = True
                     reward += 150
+                # 连续规划失败2次，可以重启了，算是撞了
+                if self.env.plan_filed_count >= 2:
+                    reward -= 150
+                    print("判断为撞了")
                 self.save_reward_done(reward, done)
                 print("reward:{}".format(reward))
                 observations = self.get_observations()
@@ -292,7 +296,7 @@ class Worker:
 
                 # 判断是否出现了规划失败，不再判断
                 # 这里只负责跳出，修改值没有用，因为已经保存了
-                if done or no_nbv:
+                if done or no_nbv or self.env.plan_filed_count >= 2:
                     break
 
         self.env.clear_trajectory()
