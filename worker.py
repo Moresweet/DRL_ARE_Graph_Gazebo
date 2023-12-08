@@ -125,7 +125,7 @@ class Worker:
         adjacent_matrix = self.calculate_edge_mask(edge_inputs)
         edge_mask = torch.from_numpy(adjacent_matrix).float().unsqueeze(0).to(self.device)
 
-        # padding edge mask
+        # padding edge maskprintf
         assert len(edge_inputs) < self.node_padding_size
         padding = torch.nn.ConstantPad2d(
             (0, self.node_padding_size - len(edge_inputs), 0, self.node_padding_size - len(edge_inputs)), 1)
@@ -275,8 +275,9 @@ class Worker:
                     reward += 150
                 # 连续规划失败2次，可以重启了，算是撞了
                 if self.env.plan_filed_count >= 2:
-                    reward -= 150
+                    reward -= 30
                     print("判断为撞了")
+                    print(self.env.plan_filed_count)
                 self.save_reward_done(reward, done)
                 print("reward:{}".format(reward))
                 observations = self.get_observations()

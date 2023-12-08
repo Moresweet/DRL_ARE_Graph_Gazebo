@@ -171,6 +171,7 @@ class GazeboEnv:
         self.bbox_having_flag = False
         self.update_frontier_flag = True
         self.robot_position = None
+        self.aug_speed = 0
         # 是否到达目标点也要单独拉出来使用
         self.goal_arrive_flag = False
         # old map
@@ -217,10 +218,14 @@ class GazeboEnv:
         self.map_sub = rospy.Subscriber(
             "/map", OccupancyGrid, self.map_callback
         )
+        self.vel_sub = rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_callback)
         # Read velodyne pointcloud and turn it into distance data, then select the minimum value for each angle
         # range as state representation
         self.begin()
         # source code in here to controller plo2t
+
+    def cmd_vel_callback(self, msg):
+        self.aug_speed = msg.angular.z
 
     def cal_path_plan_dist(self, start_point, goal_point):
         # 创建起始点和目标点
@@ -328,29 +333,29 @@ class GazeboEnv:
 
     def box_array_callback(self, msg):
         # 目标不一定有，所以只检测一次，即使没有也关闭检测
-        # if self.update_bbox_flag is True:
-        if msg.boxes is not None:
-            # 是否存档匹配需要用条件卡一卡
-            self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
-            self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
-            # 每个step都有可能出现新目标
-            self.bbox_detect_object = np.zeros([6, 1]) * 0
-            self.bbox_detect_area = np.full((6, 2, 2), np.inf)
-            if len(msg.boxes) != 0:
-                self.bbox_having_flag = True
-                for bbox in msg.boxes:
-                    # print("发现目标")
-                    bbox_x_center = convert_map_pixel(bbox.pose.position.x)
-                    bbox_y_center = convert_map_pixel(bbox.pose.position.y)
-                    bbox_x_length = bbox.dimensions.x / 0.05
-                    bbox_y_length = bbox.dimensions.y / 0.05
-                    self.bbox_detect_object[bbox.label] = 1
-                    self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
-                                                                  (bbox_x_length, bbox_y_length)])
-                    # 加入数组，批量更新
-                    self.bbox_detect_array.append(self.bbox_detect_object)
-                    self.bbox_area_array.append(self.bbox_detect_area)
-            # self.update_bbox_flag = False
+        if self.update_bbox_flag is True:
+            if msg.boxes is not None:
+                # 是否存档匹配需要用条件卡一卡
+                self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
+                self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
+                # 每个step都有可能出现新目标
+                self.bbox_detect_object = np.zeros([6, 1]) * 0
+                self.bbox_detect_area = np.full((6, 2, 2), np.inf)
+                if len(msg.boxes) != 0:
+                    self.bbox_having_flag = True
+                    for bbox in msg.boxes:
+                        # print("发现目标")
+                        bbox_x_center = convert_map_pixel(bbox.pose.position.x)
+                        bbox_y_center = convert_map_pixel(bbox.pose.position.y)
+                        bbox_x_length = bbox.dimensions.x / 0.05
+                        bbox_y_length = bbox.dimensions.y / 0.05
+                        self.bbox_detect_object[bbox.label] = 1
+                        self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
+                                                                      (bbox_x_length, bbox_y_length)])
+                        # 加入数组，批量更新
+                        self.bbox_detect_array.append(self.bbox_detect_object)
+                        self.bbox_area_array.append(self.bbox_detect_area)
+            self.update_bbox_flag = False
 
     def goal_arrive_callback(self, goal_status):
         # self.goal_arrive_flag = False
@@ -362,7 +367,7 @@ class GazeboEnv:
                 if status.status == 3:  # status 3 表示导航成功完成
                     # print("导航成功")
                     self.goal_arrive_flag = True
-                elif status.status == 4: # status 4 表示规划失败
+                elif status.status == 4:  # status 4 表示规划失败
                     self.move_plan_filed = True
         # else:
         #     print("获取导航状态禁用中")
@@ -385,9 +390,9 @@ class GazeboEnv:
     def begin(self):
         # 检测一下目标
         # 一直开启检测
-        # self.update_bbox_flag = True
-        # while self.update_bbox_flag:
-        #     pass
+        self.update_bbox_flag = True
+        while self.update_bbox_flag:
+            pass
         # 等待更新机器人的状态
         start_time_1 = timeit.default_timer()
         while self.robot_position is None or self.robot_belief is None or self.frontiers is None:
@@ -521,14 +526,14 @@ class GazeboEnv:
         # 仍然需要超时保障
         while self.goal_arrive_flag is False and self.move_plan_filed is False:
             if time.time() - start_time > 8:
-                    # 规划失败，关闭导航状态检测
-                    self.goal_cancel()
-                    self.update_nav_status_flag = False
-                    plan_failed = True
-                    # 后退一步
-                    self.backward_step()
-                    self.plan_filed_count += 1
-                    break
+                # 规划失败，关闭导航状态检测
+                self.goal_cancel()
+                self.update_nav_status_flag = False
+                plan_failed = True
+                # 后退一步
+                self.backward_step()
+                self.plan_filed_count += 1
+                break
 
         if self.move_plan_filed:
             self.goal_cancel()
@@ -591,10 +596,10 @@ class GazeboEnv:
         # print("更新边界信息成功，用时{}s".format(execution_time))
         # 检测目标的存在性
         # 一直开启，手动判断
-        # self.update_bbox_flag = True
+        self.update_bbox_flag = True
         # start_time_1 = timeit.default_timer()
-        # while self.update_bbox_flag is True:
-        #     pass
+        while self.update_bbox_flag is True:
+            pass
         # end_time = timeit.default_timer()
         # execution_time = end_time - start_time_1
         # print("检测目标信息成功，用时{}s".format(execution_time))
@@ -736,7 +741,8 @@ class GazeboEnv:
         reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score
         reward += area_find_score
-        reward += score_policy_dist
+        if area_find_score == 0:
+            reward += score_policy_dist
         # reward += area_find_score
         # reward += - dist / 38
         return reward, score
@@ -800,7 +806,8 @@ class GazeboEnv:
                 # 剔除在新区域中的点
                 observed_index = [x for x in observed_index if x not in new_index]
                 # 筛选出observed_index中的非零权值
-                observed_nonzero_values = [self.object_value[index] for index in observed_index if self.object_value[index] != 0]
+                observed_nonzero_values = [self.object_value[index] for index in observed_index if
+                                           self.object_value[index] != 0]
                 # 多次匹配问题，一种类型匹配一次就够了
                 # observed_nonzero_values = list(set(observed_nonzero_values))
                 unique_list = []
@@ -813,7 +820,8 @@ class GazeboEnv:
                     # matching_count += np.sum(
                     #     np.logical_and(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
                     matching_count += np.sum(
-                        np.dot(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
+                        np.dot(np.array(new_object).reshape(-1, 1),
+                               np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
                     if matching_count != 0:
                         visited_object.append(current_object_value[0])
                         print("有语义得分")
