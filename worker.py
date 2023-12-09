@@ -85,7 +85,7 @@ class Worker:
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape((n_nodes, 1))
         node_object_value_inputs = object_value.reshape((n_nodes, 1))
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost, node_object_value_inputs), axis=1)
+        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost), axis=1)
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
 
         # padding the number of node to a given node padding size

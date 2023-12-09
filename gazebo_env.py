@@ -733,12 +733,12 @@ class GazeboEnv:
         # 即使不需要边界发现值了，也需要设置
         area_find_score = delta_num / 100
         # 还有一点就是两个选择的边界中心是不是会距离很远，根本难以匹配，所以最好还是障碍物语义应该在节点上，用节点去判断
-        reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
+        # reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score
         reward += area_find_score
         # reward += score_policy_dist
         # reward += area_find_score
-        # reward += - dist / 38
+        reward += - dist / 38
         return reward, score
 
     def match_object_score(self):
