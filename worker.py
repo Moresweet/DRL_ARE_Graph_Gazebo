@@ -15,6 +15,8 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 from parameter import *
 
+from memory_profiler import profile
+
 
 class Worker:
     def __init__(self, meta_agent_id, policy_net, q_net, global_step, device='cuda', greedy=False, save_image=False):
@@ -215,7 +217,7 @@ class Worker:
             if observations is None:
                 # 环境重启，重新这一轮
                 self.env.reset()
-            for i in range(60):
+            for i in range(64):
                 # 经验池是一条一条的
                 if observations is None:
                     observations = self.get_observations()
@@ -279,7 +281,7 @@ class Worker:
                     print("判断为撞了")
                     print(self.env.plan_filed_count)
                 self.save_reward_done(reward, done)
-                print("reward:{}".format(reward))
+                # print("reward:{}".format(reward))
                 observations = self.get_observations()
                 # 观测获取失败
                 if observations is None:
@@ -323,7 +325,6 @@ class Worker:
         reset_msg.data = 1
         self.env.reset_nbv_pub.publish(reset_msg)
         time.sleep(3)
-
 
     def work(self, currEpisode):
         self.run_episode(currEpisode)

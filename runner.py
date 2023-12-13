@@ -3,7 +3,7 @@ import ray
 from model import PolicyNet, QNet
 from worker import Worker
 from parameter import *
-
+from memory_profiler import profile
 
 class Runner(object):
     def __init__(self, meta_agent_id):
@@ -31,6 +31,7 @@ class Runner(object):
 
         job_results = worker.episode_buffer
         perf_metrics = worker.perf_metrics
+        del worker
         return job_results, perf_metrics
 
     def job(self, weights_set, episode_number):

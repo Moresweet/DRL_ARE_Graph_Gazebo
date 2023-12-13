@@ -166,7 +166,7 @@ class GazeboEnv:
         # 获取导航标志需要与目标到达情况配合使用
         self.update_nav_status_flag = False
         # 一直检测
-        # self.update_bbox_flag = False
+        self.update_bbox_flag = False
         # 是否有目标也要单独拉出来使用
         self.bbox_having_flag = False
         self.update_frontier_flag = True
@@ -741,9 +741,11 @@ class GazeboEnv:
         reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score
         reward += area_find_score
-        if area_find_score == 0:
-            reward += score_policy_dist
+        # if area_find_score == 0:
+        #     reward += score_policy_dist
         # reward += area_find_score
+        if area_find_score == 0:
+            reward += - dist / 38
         # reward += - dist / 38
         return reward, score
 
@@ -921,7 +923,7 @@ class GazeboEnv:
             values = self.object_value[self.object_value != 0].astype(int)
             colors = plt.cm.viridis(values / values.max())  # 根据值生成颜色，这里使用了viridis colormap
             plt.scatter(object_coords[:, 0], object_coords[:, 1], c=colors, marker='s', s=80, zorder=6)
-            print("绘制目标点")
+            # print("绘制目标点")
         plt.scatter(self.frontiers[:, 0], self.frontiers[:, 1], c='r', s=2, zorder=3)
         plt.plot(self.xPoints, self.yPoints, 'b', linewidth=2)
         plt.plot(self.xPoints[-1], self.yPoints[-1], 'mo', markersize=8)

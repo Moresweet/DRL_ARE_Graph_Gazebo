@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from memory_profiler import profile
 
 
 # a pointer network layer for policy output
@@ -172,7 +173,8 @@ class DecoderLayer(nn.Module):
         h0 = tgt
         tgt = self.normalization1(tgt)
         memory = self.normalization1(memory)
-        h, w = self.multiHeadAttention(q=tgt, k=memory, v=memory, key_padding_mask=key_padding_mask, attn_mask=attn_mask)
+        h, w = self.multiHeadAttention(q=tgt, k=memory, v=memory, key_padding_mask=key_padding_mask,
+                                       attn_mask=attn_mask)
         h = h + h0
         h1 = h
         h = self.normalization2(h)
@@ -184,6 +186,9 @@ class DecoderLayer(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, embedding_dim=128, n_head=8, n_layer=1):
         super(Encoder, self).__init__()
+        # 如果之前已经创建了layers，先进行清理
+        # if hasattr(self, 'layers'):
+        #     del self.layers  # 删除对先前层的引用
         self.layers = nn.ModuleList(EncoderLayer(embedding_dim, n_head) for i in range(n_layer))
 
     def forward(self, src, key_padding_mask=None, attn_mask=None):
@@ -206,7 +211,7 @@ class Decoder(nn.Module):
 class PolicyNet(nn.Module):
     def __init__(self, input_dim, embedding_dim):
         super(PolicyNet, self).__init__()
-        self.initial_embedding = nn.Linear(input_dim, embedding_dim) # layer for non-end position
+        self.initial_embedding = nn.Linear(input_dim, embedding_dim)  # layer for non-end position
         self.current_embedding = nn.Linear(embedding_dim * 2, embedding_dim)
 
         self.encoder = Encoder(embedding_dim=embedding_dim, n_head=8, n_layer=6)
@@ -233,27 +238,30 @@ class PolicyNet(nn.Module):
         else:
             current_mask = None
 
-        current_mask[:,:,0] = 1 # don't stay at current position
-        #assert 0 in current_mask
+        current_mask[:, :, 0] = 1  # don't stay at current position
+        # assert 0 in current_mask
 
         enhanced_current_node_feature, _ = self.decoder(current_node_feature, enhanced_node_feature, node_padding_mask)
-        enhanced_current_node_feature = self.current_embedding(torch.cat((enhanced_current_node_feature, current_node_feature), dim=-1))
+        enhanced_current_node_feature = self.current_embedding(
+            torch.cat((enhanced_current_node_feature, current_node_feature), dim=-1))
         logp = self.pointer(enhanced_current_node_feature, neigboring_feature, current_mask)
-        logp= logp.squeeze(1) # batch_size*k_size
+        logp = logp.squeeze(1)  # batch_size*k_size
 
         return logp
 
-    def forward(self, node_inputs, edge_inputs, current_index, node_padding_mask=None, edge_padding_mask=None, edge_mask=None):
+    def forward(self, node_inputs, edge_inputs, current_index, node_padding_mask=None, edge_padding_mask=None,
+                edge_mask=None):
         enhanced_node_feature = self.encode_graph(node_inputs, node_padding_mask, edge_mask)
-        logp = self.output_policy(enhanced_node_feature, edge_inputs, current_index, edge_padding_mask, node_padding_mask)
+        logp = self.output_policy(enhanced_node_feature, edge_inputs, current_index, edge_padding_mask,
+                                  node_padding_mask)
         return logp
 
 
 class QNet(nn.Module):
     def __init__(self, input_dim, embedding_dim):
         super(QNet, self).__init__()
-        self.initial_embedding = nn.Linear(input_dim, embedding_dim) # layer for non-end position
-        self.action_embedding = nn.Linear(embedding_dim*3, embedding_dim)
+        self.initial_embedding = nn.Linear(input_dim, embedding_dim)  # layer for non-end position
+        self.action_embedding = nn.Linear(embedding_dim * 3, embedding_dim)
 
         self.encoder = Encoder(embedding_dim=embedding_dim, n_head=8, n_layer=6)
         self.decoder = Decoder(embedding_dim=embedding_dim, n_head=8, n_layer=1)
@@ -276,8 +284,10 @@ class QNet(nn.Module):
 
         current_node_feature = torch.gather(enhanced_node_feature, 1, current_index.repeat(1, 1, embedding_dim))
 
-        enhanced_current_node_feature, attention_weights = self.decoder(current_node_feature, enhanced_node_feature, node_padding_mask)
-        action_features = torch.cat((enhanced_current_node_feature.repeat(1, k_size, 1), current_node_feature.repeat(1, k_size, 1), neigboring_feature), dim=-1)
+        enhanced_current_node_feature, attention_weights = self.decoder(current_node_feature, enhanced_node_feature,
+                                                                        node_padding_mask)
+        action_features = torch.cat((enhanced_current_node_feature.repeat(1, k_size, 1),
+                                     current_node_feature.repeat(1, k_size, 1), neigboring_feature), dim=-1)
         action_features = self.action_embedding(action_features)
         q_values = self.q_values_layer(action_features)
 
@@ -286,7 +296,7 @@ class QNet(nn.Module):
         else:
             current_mask = None
         current_mask[:, :, 0] = 1  # don't stay at current position
-        #assert 0 in current_mask
+        # assert 0 in current_mask
         current_mask = current_mask.permute(0, 2, 1)
         zero = torch.zeros_like(q_values).to(q_values.device)
         q_values = torch.where(current_mask == 1, zero, q_values)
@@ -296,6 +306,6 @@ class QNet(nn.Module):
     def forward(self, node_inputs, edge_inputs, current_index, node_padding_mask=None, edge_padding_mask=None,
                 edge_mask=None):
         enhanced_node_feature = self.encode_graph(node_inputs, node_padding_mask, edge_mask)
-        q_values, attention_weights = self.output_q_values(enhanced_node_feature, edge_inputs, current_index, edge_padding_mask, node_padding_mask)
+        q_values, attention_weights = self.output_q_values(enhanced_node_feature, edge_inputs, current_index,
+                                                           edge_padding_mask, node_padding_mask)
         return q_values, attention_weights
-
