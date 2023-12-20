@@ -1,5 +1,6 @@
 import copy
 import os
+import random
 import time
 import timeit
 
@@ -44,6 +45,7 @@ class Worker:
         )
         self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.update_center_frontier = True
+        self.current_scene_index = 1
         # 15如何来，是这么来的，在worker中，经验池有15项数据
         for i in range(15):
             self.episode_buffer.append([])
@@ -204,6 +206,8 @@ class Worker:
         done = False
         no_nbv = False
         # self.env.clear_trajectory()
+        if curr_episode == 1:
+            self.env.reset(4)
 
         observations = self.get_observations()
         # obervations 在地图漂移的情况下会是None
@@ -216,7 +220,8 @@ class Worker:
                 break
             if observations is None:
                 # 环境重启，重新这一轮
-                self.env.reset()
+                scene_index = curr_episode % 6 + 4
+                self.env.reset(scene_index)
             for i in range(64):
                 # 经验池是一条一条的
                 if observations is None:
@@ -240,14 +245,21 @@ class Worker:
                     print("因选点重置")
                     break
                 self.save_observations(observations)
-                policy_center_frontier = self.select_closest_frontier(next_position)
+                policy_center_frontier = None
+                try:
+                    policy_center_frontier = self.select_closest_frontier(next_position)
+                except AttributeError:
+                    print("边界点获取失败")
+                    no_nbv = True
+                    break
                 # 经验池保存动作
                 self.save_action(action_index)
                 # print("nextposition:{} {}", next_position[0], next_position[1])
                 reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
                     policy_center_frontier,
                     next_position,
-                    self.travel_dist)
+                    self.travel_dist,
+                    self.current_scene_index)
                 # 这里直接跳出会导致 经验池的尺寸出问题
                 # if reward < -10000:
                 #     break
@@ -275,6 +287,7 @@ class Worker:
                 if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                     done = True
                     reward += 150
+                    print("done")
                 # 连续规划失败2次，可以重启了，算是撞了
                 if self.env.plan_filed_count >= 2:
                     reward -= 30
@@ -313,7 +326,13 @@ class Worker:
         if self.save_image:
             path = gifs_path
             self.make_gif(path, curr_episode)
-        self.env.reset()
+        # 每12轮换一次场景
+        if curr_episode % 10 == 0:
+            scene_index = (self.current_scene_index + 1) % 4
+            self.env.reset(scene_index)
+        else:
+            reset_position_index = self.current_scene_index + 20
+            self.env.reset(reset_position_index)
         # 重启nbv
         # if no_nbv is True:
         #     reset_msg = Int8()

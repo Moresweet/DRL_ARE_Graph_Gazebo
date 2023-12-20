@@ -2,7 +2,7 @@
 REPLAY_SIZE = 5000  # 5000
 # MINIMUM_BUFFER_SIZE = 2000
 MINIMUM_BUFFER_SIZE = 1200  # 1200
-BATCH_SIZE = 32  # 32
+BATCH_SIZE = 40  # 32
 INPUT_DIM = 5
 EMBEDDING_DIM = 128
 NODE_PADDING_SIZE = 360  # the number of nodes will be padded to this value
@@ -23,5 +23,5 @@ FOLDER_NAME = 'ae_clean'
 model_path = f'model/{FOLDER_NAME}'
 train_path = f'train/{FOLDER_NAME}'
 gifs_path = f'gifs/{FOLDER_NAME}'
-LOAD_MODEL = False  # do you want to load the model trained before
+LOAD_MODEL = True  # do you want to load the model trained before
 SAVE_IMG_GAP = 100

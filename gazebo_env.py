@@ -159,6 +159,8 @@ class GazeboEnv:
 
         # 连续规划失败基本是陷入了不可逆的困境
         self.plan_filed_count = 0
+        # 当前场景索引,4为origin
+        self.current_scene_index = 4
         self.move_plan_filed = False
         # flag均以锁的形式使用
         self.update_belief_flag = True
@@ -166,12 +168,12 @@ class GazeboEnv:
         # 获取导航标志需要与目标到达情况配合使用
         self.update_nav_status_flag = False
         # 一直检测
-        self.update_bbox_flag = False
+        # self.update_bbox_flag = False
         # 是否有目标也要单独拉出来使用
         self.bbox_having_flag = False
         self.update_frontier_flag = True
         self.robot_position = None
-        self.aug_speed = 0
+        self.current_speed = 0
         # 是否到达目标点也要单独拉出来使用
         self.goal_arrive_flag = False
         # old map
@@ -212,9 +214,9 @@ class GazeboEnv:
         self.goal_arrive_sub = rospy.Subscriber(
             "/move_base/status", GoalStatusArray, self.goal_arrive_callback
         )
-        self.filter_box_sub = rospy.Subscriber(
-            "/boxes_filtered", BoundingBoxArray, self.box_array_callback
-        )
+        # self.filter_box_sub = rospy.Subscriber(
+        #     "/boxes_filtered", BoundingBoxArray, self.box_array_callback
+        # )
         self.map_sub = rospy.Subscriber(
             "/map", OccupancyGrid, self.map_callback
         )
@@ -225,7 +227,16 @@ class GazeboEnv:
         # source code in here to controller plo2t
 
     def cmd_vel_callback(self, msg):
-        self.aug_speed = msg.angular.z
+        speed_list = [msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.x, msg.angular.y, msg.angular.z]
+        zero_count = 0
+        for speed in speed_list:
+            if speed == 0:
+                zero_count += 1
+        if zero_count == len(speed_list):
+            self.current_speed = 0
+        else:
+            self.current_speed = 1
+        # print('speed:{}'.format(self.current_speed))
 
     def cal_path_plan_dist(self, start_point, goal_point):
         # 创建起始点和目标点
@@ -307,6 +318,97 @@ class GazeboEnv:
         goal_id = GoalID()
         self.goal_cancel_pub.publish(goal_id)
 
+    def set_box_util(self, label, x, y, x_length, y_length):
+        obj = np.zeros([6, 1]) * 0
+        area = np.full((6, 2, 2), np.inf)
+        obj[label] = 1
+        area[label] = np.array([(convert_map_pixel(x), convert_map_pixel(y)), (x_length / 0.05, y_length / 0.05)])
+        self.bbox_detect_array.append(obj)
+        self.bbox_area_array.append(area)
+
+    def set_bbox(self):
+        if self.current_scene_index == 4:
+            # self.set_box_util(0, 0.68, -2.03, 0.5, 0.5)
+            # self.set_box_util(1, 1.78, -2.28, 1, 1)
+            self.set_box_util(2, 2.22, -3.89, 0.5, 0.5)
+            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+
+            self.set_box_util(2, 3.8, -2.6, 0.5, 0.5)
+            # 1.57的桌子要倒换
+            self.set_box_util(3, 4.38, -2.92, 0.7, 2)
+
+            self.set_box_util(2, 3.8, 2.2, 0.5, 0.5)
+            self.set_box_util(3, 4.3, 2.2, 0.7, 2)
+
+            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+
+            self.set_box_util(4, -2.7, 2.6, 1, 1)
+
+            # 0的沙发要倒换
+            self.set_box_util(5, -4.2, 2.2, 1, 2)
+            self.set_box_util(5, -3, 4.3, 1, 1)
+
+        elif self.current_scene_index == 5:
+            # self.set_box_util(0, 0.5, -2, 0.5, 0.5)
+            # self.set_box_util(1, 1.87, -2, 1, 1)
+            self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
+            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+
+            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+
+            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+
+            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+
+            self.set_box_util(4, -2.6, -2.4, 1, 1)
+
+            self.set_box_util(5, -4.4, -3.8, 1, 2)
+            self.set_box_util(5, -4.3, -1, 1, 1)
+
+        elif self.current_scene_index == 6:
+            # self.set_box_util(0, 0.7, -2.8, 0.5, 0.5)
+            # self.set_box_util(1, 0.7, -1.89, 1, 1)
+            self.set_box_util(2, 1.14, -3.78, 0.5, 0.5)
+            self.set_box_util(3, 1.16, -4.24, 2, 0.7)
+
+            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+
+            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+
+            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+
+            self.set_box_util(4, -3.64, -2.6, 1, 1)
+
+            self.set_box_util(5, -1.79, -2.68, 1, 2)
+            self.set_box_util(5, -4.3, -4.24, 1, 1)
+
+        elif self.current_scene_index == 7:
+            # self.set_box_util(0, 1.62, -1.08, 0.5, 0.5)
+            # self.set_box_util(1, 1.64, -2.12, 1, 1)
+            self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
+            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+
+            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+
+            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+
+            self.set_box_util(2, 1, 3.7, 0.5, 0.5)
+            self.set_box_util(3, 1.46, 4.45, 2, 0.7)
+
+            self.set_box_util(4, -2.85, -0.58, 1, 1)
+
+            self.set_box_util(5, -4.57, -0.47, 1, 2)
+            self.set_box_util(5, -1.81, -0.97, 1, 1)
+
     def map_callback(self, msg):
         if self.update_belief_flag is True:
             # print("更新局部地图")
@@ -315,7 +417,7 @@ class GazeboEnv:
             belief[(belief >= 0) & (belief <= 19.6)] = 255
             belief[(belief >= 65) & (belief <= 100)] = 1  # 一开始搞错了，搞成了0
             self.robot_belief = belief
-            self.update_belief_flag = False
+            # self.update_belief_flag = False
 
     # def box_array_callback(self, msg):
     #     if msg.boxes is not None and self.center_policy_frontier is not None:
@@ -333,29 +435,29 @@ class GazeboEnv:
 
     def box_array_callback(self, msg):
         # 目标不一定有，所以只检测一次，即使没有也关闭检测
-        if self.update_bbox_flag is True:
-            if msg.boxes is not None:
-                # 是否存档匹配需要用条件卡一卡
-                self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
-                self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
-                # 每个step都有可能出现新目标
-                self.bbox_detect_object = np.zeros([6, 1]) * 0
-                self.bbox_detect_area = np.full((6, 2, 2), np.inf)
-                if len(msg.boxes) != 0:
-                    self.bbox_having_flag = True
-                    for bbox in msg.boxes:
-                        # print("发现目标")
-                        bbox_x_center = convert_map_pixel(bbox.pose.position.x)
-                        bbox_y_center = convert_map_pixel(bbox.pose.position.y)
-                        bbox_x_length = bbox.dimensions.x / 0.05
-                        bbox_y_length = bbox.dimensions.y / 0.05
-                        self.bbox_detect_object[bbox.label] = 1
-                        self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
-                                                                      (bbox_x_length, bbox_y_length)])
-                        # 加入数组，批量更新
-                        self.bbox_detect_array.append(self.bbox_detect_object)
-                        self.bbox_area_array.append(self.bbox_detect_area)
-            self.update_bbox_flag = False
+        # if self.update_bbox_flag is True:
+        if msg.boxes is not None and self.current_speed == 0:
+            # 是否存档匹配需要用条件卡一卡
+            self.last_detect_object = copy.deepcopy(self.bbox_detect_object)
+            self.last_detect_area = copy.deepcopy(self.bbox_detect_area)
+            # 每个step都有可能出现新目标
+            self.bbox_detect_object = np.zeros([6, 1]) * 0
+            self.bbox_detect_area = np.full((6, 2, 2), np.inf)
+            if len(msg.boxes) != 0:
+                self.bbox_having_flag = True
+                for bbox in msg.boxes:
+                    # print("发现目标")
+                    bbox_x_center = convert_map_pixel(bbox.pose.position.x)
+                    bbox_y_center = convert_map_pixel(bbox.pose.position.y)
+                    bbox_x_length = bbox.dimensions.x / 0.05
+                    bbox_y_length = bbox.dimensions.y / 0.05
+                    self.bbox_detect_object[bbox.label] = 1
+                    self.bbox_detect_area[bbox.label] = np.array([(bbox_x_center, bbox_y_center),
+                                                                  (bbox_x_length, bbox_y_length)])
+                    # 加入数组，批量更新
+                    self.bbox_detect_array.append(self.bbox_detect_object)
+                    self.bbox_area_array.append(self.bbox_detect_area)
+            # self.update_bbox_flag = False
 
     def goal_arrive_callback(self, goal_status):
         # self.goal_arrive_flag = False
@@ -382,17 +484,24 @@ class GazeboEnv:
                 self.update_frontier_flag = False
 
     def update_robot_belief(self, robot_belief):
-        self.old_robot_belief = robot_belief
+        # 需要的时候手动给旧的赋值
+        # self.old_robot_belief = robot_belief
+        # print('old are:{}'.format(np.sum(self.old_robot_belief==255)))
         # 更新完告知地图回调，更新局部地图
-        time.sleep(2)
+        # time.sleep(2)
         self.update_belief_flag = True
+        time.sleep(3)
+        self.update_belief_flag = False
 
     def begin(self):
+        # 临时设置静态语义
+        self.bbox_having_flag = True
+        self.set_bbox()
         # 检测一下目标
         # 一直开启检测
-        self.update_bbox_flag = True
-        while self.update_bbox_flag:
-            pass
+        # self.update_bbox_flag = True
+        # while self.update_bbox_flag:
+        #     pass
         # 等待更新机器人的状态
         start_time_1 = timeit.default_timer()
         while self.robot_position is None or self.robot_belief is None or self.frontiers is None:
@@ -402,7 +511,7 @@ class GazeboEnv:
                 reset_msg = Int8()
                 reset_msg.data = 1
                 self.reset_nbv_pub.publish(reset_msg)
-                time.sleep(3)
+                # time.sleep(3)
         if self.plot:
             # initialize the route
             self.xPoints = [self.robot_position[0]]
@@ -425,7 +534,7 @@ class GazeboEnv:
             self.robot_position, self.robot_belief, self.frontiers, self.bbox_detect_object, self.bbox_detect_area,
             self.bbox_having_flag)
         # 用完记得重置
-        self.bbox_having_flag = False
+        # self.bbox_having_flag = False
         self.gen_relation_matrix()
 
     def odom_callback(self, od_data):
@@ -485,7 +594,8 @@ class GazeboEnv:
         self.trajectory_points = []
 
     # 策略已经生成所选择的边界点，边界点的集合应该在状态空间中
-    def step(self, policy_center_frontiers, next_position, travel_dist):
+    def step(self, policy_center_frontiers, next_position, travel_dist, current_scene_index):
+        self.current_scene_index = current_scene_index
         self.center_policy_frontier = policy_center_frontiers
         # 此时的机器人位置是未导航之前的
         # 修改dist计算方式
@@ -575,6 +685,7 @@ class GazeboEnv:
         start_time_1 = timeit.default_timer()
         while self.update_belief_flag is True:
             pass
+        # print('current area:{}'.format(np.sum(self.robot_belief==255)))
         end_time = timeit.default_timer()
         execution_time = end_time - start_time_1
         # print("更新belief信息成功，用时{}s".format(execution_time))
@@ -596,10 +707,10 @@ class GazeboEnv:
         # print("更新边界信息成功，用时{}s".format(execution_time))
         # 检测目标的存在性
         # 一直开启，手动判断
-        self.update_bbox_flag = True
+        # self.update_bbox_flag = True
         # start_time_1 = timeit.default_timer()
-        while self.update_bbox_flag is True:
-            pass
+        # while self.update_bbox_flag is True:
+        #     pass
         # end_time = timeit.default_timer()
         # execution_time = end_time - start_time_1
         # print("检测目标信息成功，用时{}s".format(execution_time))
@@ -635,7 +746,7 @@ class GazeboEnv:
                                                       start_position,
                                                       travel_dist)
         # 重置标志位
-        self.bbox_having_flag = False
+        # self.bbox_having_flag = False
         done = self.check_done()
         if self.plot:
             self.xPoints.append(self.robot_position[0])
@@ -683,6 +794,17 @@ class GazeboEnv:
         # 仿真环境中的边界噪声严重，感觉奖励可以用新自由区域等价替换
         pre_frontiers_num = frontiers_to_check.shape[0]
         # delta_num = pre_frontiers_num - frontiers_num
+        # 调试区域变化
+        # plt.imshow(self.old_robot_belief, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
+        # plt.imshow(self.robot_belief, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
+        # diff = self.robot_belief - self.old_robot_belief
+        # plt.imshow(diff, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
         delta_num = np.sum(self.robot_belief == 255) - np.sum(self.old_robot_belief == 255)
         if delta_num < 300:
             delta_num = 0
@@ -831,31 +953,45 @@ class GazeboEnv:
                         print(observed_object)
         return matching_count
 
-    def reset(self):
+    def reset(self, scene_index):
         self.clear_trajectory()
         self.bbox_detect_object = np.zeros([6, 1]) * 0
         self.bbox_detect_area = np.full((6, 2), np.inf)
-        object_state = self.set_self_state
-        object_state.pose.position.x = -3.5
-        object_state.pose.position.y = -3.6
-        object_state.pose.position.z = 0.0
-        quaternion = Quaternion.from_euler(1.0, 0.0, 0.0)
-        object_state.pose.orientation.x = quaternion.x
-        object_state.pose.orientation.y = quaternion.y
-        object_state.pose.orientation.z = quaternion.z
-        object_state.pose.orientation.w = quaternion.w
-        self.set_state.publish(object_state)
+        # object_state = self.set_self_state
+        # object_state.pose.position.x = -3.5
+        # object_state.pose.position.y = -3.6
+        # object_state.pose.position.z = 0.0
+        # quaternion = Quaternion.from_euler(1.0, 0.0, 0.0)
+        # object_state.pose.orientation.x = quaternion.x
+        # object_state.pose.orientation.y = quaternion.y
+        # object_state.pose.orientation.z = quaternion.z
+        # object_state.pose.orientation.w = quaternion.w
+        # self.set_state.publish(object_state)
+        msg = Int8()
+        # msg.data = 9
+        # self.gmapping_reset_pub.publish(msg)
+        # rospy.sleep(6.0)
+        msg.data = scene_index
+        self.gmapping_reset_pub.publish(msg)
+        if scene_index > 20:
+            time.sleep(2.0)
+        else:
+            time.sleep(10.0)
         self.update_position_flag = True
         while self.update_position_flag is True:
             pass
-        self.update_belief_flag = True
-        while self.update_belief_flag is True:
-            pass
-        msg = Int8()
+        # self.update_belief_flag = True
+        # while self.update_belief_flag is True:
+        #     pass
+        # msg = Int8()
         msg.data = 1
-        rospy.sleep(3.0)
+        # rospy.sleep(3.0)
         self.gmapping_reset_pub.publish(msg)
-        rospy.sleep(2.0)
+        # rospy.sleep(4.0)
+        time.sleep(5.0)
+        self.update_robot_belief(self.robot_belief)
+        self.old_robot_belief = copy.deepcopy(self.robot_belief)
+        print('after reset area:{}'.format(np.sum(self.robot_belief == 255)))
 
     def gen_relation_matrix(self):
         # 定义目标类别和关系
@@ -906,11 +1042,16 @@ class GazeboEnv:
         return done
 
     def plot_env(self, n, path, step, travel_dist):
-        plt.switch_backend('agg')
+        # 有这个不显示图片
+        # plt.switch_backend('agg')
         # plt.ion()
         plt.cla()
         plt.imshow(self.robot_belief, cmap='gray')
         plt.axis((0, 384, 384, 0))
+        # plt.show()
+        # plt.imshow(self.old_robot_belief, cmap='gray')
+        # plt.axis((0, 384, 384, 0))
+        # plt.show()
         # for i in range(len(self.graph_generator.x)):
         #     plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
         #              zorder=1)  # plot edges will take long time
