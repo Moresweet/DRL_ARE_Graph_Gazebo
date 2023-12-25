@@ -220,7 +220,7 @@ class Worker:
                 break
             if observations is None:
                 # 环境重启，重新这一轮
-                scene_index = curr_episode % 6 + 4
+                scene_index = curr_episode % 4 + 4
                 self.env.reset(scene_index)
             for i in range(64):
                 # 经验池是一条一条的
@@ -268,7 +268,7 @@ class Worker:
                     reset_msg = Int8()
                     reset_msg.data = 1
                     self.reset_nbv_pub.publish(reset_msg)
-                    time.sleep(2)
+                    time.sleep(3)
                     no_nbv = False
                 start_time = timeit.default_timer()
                 self.update_center_frontier = True
@@ -286,11 +286,11 @@ class Worker:
                         mutex = False
                 if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                     done = True
-                    reward += 150
+                    reward += 50
                     print("done")
                 # 连续规划失败2次，可以重启了，算是撞了
                 if self.env.plan_filed_count >= 2:
-                    reward -= 30
+                    reward -= 20
                     print("判断为撞了")
                     print(self.env.plan_filed_count)
                 self.save_reward_done(reward, done)
@@ -328,10 +328,11 @@ class Worker:
             self.make_gif(path, curr_episode)
         # 每12轮换一次场景
         if curr_episode % 10 == 0:
-            scene_index = (self.current_scene_index + 1) % 4
+            self.current_scene_index += 1
+            scene_index = self.current_scene_index % 4 + 4
             self.env.reset(scene_index)
         else:
-            reset_position_index = self.current_scene_index + 20
+            reset_position_index = (self.current_scene_index % 4) + 20
             self.env.reset(reset_position_index)
         # 重启nbv
         # if no_nbv is True:

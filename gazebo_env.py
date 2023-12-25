@@ -14,6 +14,7 @@ import math
 import random
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
+import cv2
 
 import sensor_msgs.point_cloud2 as pc2
 from gazebo_msgs.msg import ModelState
@@ -511,7 +512,8 @@ class GazeboEnv:
                 reset_msg = Int8()
                 reset_msg.data = 1
                 self.reset_nbv_pub.publish(reset_msg)
-                # time.sleep(3)
+                # 注释掉会再启动之前再次启动
+                time.sleep(3)
         if self.plot:
             # initialize the route
             self.xPoints = [self.robot_position[0]]
@@ -802,18 +804,68 @@ class GazeboEnv:
         # plt.colorbar()
         # plt.show()
         # diff = self.robot_belief - self.old_robot_belief
+        # 保存
+        # np.save('../ros_process/pic_numpy/belief.npy', self.robot_belief)
+        # np.save('../ros_process/pic_numpy/old_belief.npy', self.old_robot_belief)
+        # np.save('../ros_process/pic_numpy/diff.npy', diff)
         # plt.imshow(diff, cmap='viridis')
         # plt.colorbar()
         # plt.show()
-        delta_num = np.sum(self.robot_belief == 255) - np.sum(self.old_robot_belief == 255)
-        if delta_num < 300:
-            delta_num = 0
-
+        # diff = np.where(diff != 128, 0, diff)
+        # diff = np.where(diff != 0, 1, diff)
+        # plt.imshow(diff, cmap='gray')
+        # np.save('../ros_process/pic_numpy/binary.npy', diff)
+        # plt.colorbar()
+        # plt.show()
+        diff = self.robot_belief - self.old_robot_belief
+        # plt.imshow(diff, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
+        # 定义形态学操作的核（结构元素）
+        kernel = np.ones((3, 3), np.uint8)  # 这里使用 3x3 的正方形核
+        diff = diff.astype('uint8')
+        contours, _ = cv2.findContours(diff.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        # 创建一个和原始图像大小相同的全零图像，用于记录已处理的像素点
+        processed = np.zeros_like(diff, dtype=bool)
+        threshold = 0.15
+        mask = np.zeros_like(diff)
+        for i, contour in enumerate(contours):
+            boundary_pixels = contour.squeeze(axis=1)  # 边界像素坐标
+            count_minus = 0  # 计数器
+            for pixel in boundary_pixels:
+                # 检查边界像素周围的像素值是否为-127
+                y, x = pixel
+                if not processed[x, y]:
+                    neighborhood = diff[max(0, x - 1):min(diff.shape[0], x + 2),
+                                   max(0, y - 1):min(diff.shape[1], y + 2)]
+                    count_minus += np.sum((neighborhood != 130) & (neighborhood != 128) & (neighborhood != 0))
+                    processed[max(0, x - 1):min(diff.shape[0], x + 2), max(0, y - 1):min(diff.shape[1], y + 2)] = True
+            filled_image = np.zeros_like(diff)
+            cv2.drawContours(filled_image, [contour], -1, 255, thickness=cv2.FILLED)
+            arc_area = np.count_nonzero(filled_image)
+            evaluation_metric = count_minus / len(boundary_pixels)
+            arc_length = cv2.arcLength(contour, closed=True)
+            # arc_area = cv2.contourArea(contour)
+            # 如果评价指标小于阈值，则剔除轮廓
+            if evaluation_metric > threshold:
+                cv2.fillPoly(mask, [contour], (255))
+        diff[mask == 255] = 0
+        # plt.imshow(diff, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
+        opening = cv2.morphologyEx(diff, cv2.MORPH_OPEN, kernel)
+        # plt.imshow(opening, cmap='viridis')
+        # plt.colorbar()
+        # plt.show()
+        # delta_num = np.sum(self.robot_belief == 255) - np.sum(self.old_robot_belief == 255)
+        # if delta_num < 300:
+        #     delta_num = 0
+        delta_num = np.sum(opening == 128)
         score = 0
         # 计算语义目标关系得分
         # 加条件防止封界抖动时的情况，重复匹配现象
         if self.bbox_having_flag is True:
-            score = self.match_object_score() * 20
+            score = self.match_object_score() * 10
         # 计算与选择的边界簇中心距离，引导机器人靠近选择的边界中心
         # 簇中心选择的好坏需要任务的完成情况得分来评判，毕竟簇中心的选择是策略的输出
         # self.robot_postion 是已经导航完毕的机器人所在点
@@ -866,8 +918,7 @@ class GazeboEnv:
         # if area_find_score == 0:
         #     reward += score_policy_dist
         # reward += area_find_score
-        if area_find_score == 0:
-            reward += - dist / 38
+        #
         # reward += - dist / 38
         return reward, score
 
