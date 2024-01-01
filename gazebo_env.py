@@ -564,6 +564,7 @@ class GazeboEnv:
                     self.move_plan_filed = True
         # else:
         #     print("获取导航状态禁用中")
+
     def get_frontier_callback(self, frontier_marker):
         if self.update_frontier_flag is True:
             if len(frontier_marker.points) > 0:
@@ -1175,7 +1176,7 @@ class GazeboEnv:
         # 手动建图获得的自由区域的像素点数量为33376
         # 在原本的设计中，训练阶段看节点效用，验证阶段看节点效用以及探索率
         # if self.test and np.sum(self.robot_belief == 255) >= int(33376 * 0.99):
-        if np.sum(self.robot_belief == 255) >= int(34000 * 0.99):
+        if np.sum(self.robot_belief == 255) >= int(34000):  # * 0.99):
             done = True
         elif np.sum(self.node_utility) == 0:
             done = True
