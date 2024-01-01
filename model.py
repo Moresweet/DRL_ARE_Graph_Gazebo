@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import math
-from memory_profiler import profile
 
 
 # a pointer network layer for policy output

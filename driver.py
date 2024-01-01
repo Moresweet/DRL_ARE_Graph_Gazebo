@@ -13,8 +13,8 @@ from parameter import *
 
 from memory_profiler import profile
 
-ray.init(local_mode=True)
-# ray.init()
+# ray.init(local_mode=True)
+ray.init()
 print("Welcome to RL autonomous exploration!")
 
 writer = SummaryWriter(train_path)

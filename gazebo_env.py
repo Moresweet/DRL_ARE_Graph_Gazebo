@@ -24,13 +24,15 @@ from nav_msgs.msg import Odometry
 from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Int8
 from nav_msgs.srv import GetPlan
+from gazebo_msgs.srv import GetModelState
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.point_cloud2 import create_cloud_xyz32, PointField
 from sensor_msgs.msg import LaserScan
 from actionlib_msgs.msg import GoalStatusArray, GoalID
 from squaternion import Quaternion
 from std_srvs.srv import Empty
-from tf.transformations import quaternion_from_euler
+# from tf.transformations import quaternion_from_euler
+from tf import transformations
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 from jsk_recognition_msgs.msg import BoundingBoxArray
@@ -38,6 +40,8 @@ from jsk_recognition_msgs.msg import BoundingBoxArray
 from graph_generator import *
 from node import *
 from skimage.measure import block_reduce
+
+from memory_profiler import profile
 
 GOAL_REACHED_DIST = 0.3
 COLLISION_DIST = 0.35
@@ -293,7 +297,7 @@ class GazeboEnv:
         yaw = math.atan2(dy, dx)
 
         # 将夹角转化为四元数
-        quaternion = quaternion_from_euler(0, 0, yaw)
+        quaternion = transformations.quaternion_from_euler(0, 0, yaw)
 
         return quaternion
 
@@ -327,88 +331,174 @@ class GazeboEnv:
         self.bbox_detect_array.append(obj)
         self.bbox_area_array.append(area)
 
+    def get_model_pose(self, model_name):
+        rospy.wait_for_service('/gazebo/get_model_state')
+        try:
+            get_model_srv = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
+            model_state = get_model_srv(model_name, 'world')  # 获取模型在世界坐标系中的位姿
+            pose = model_state.pose  # 获取模型的位姿信息
+            return pose
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call failed: %s" % e)
+
     def set_bbox(self):
-        if self.current_scene_index == 4:
-            # self.set_box_util(0, 0.68, -2.03, 0.5, 0.5)
-            # self.set_box_util(1, 1.78, -2.28, 1, 1)
-            self.set_box_util(2, 2.22, -3.89, 0.5, 0.5)
-            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
-
-            self.set_box_util(2, 3.8, -2.6, 0.5, 0.5)
-            # 1.57的桌子要倒换
-            self.set_box_util(3, 4.38, -2.92, 0.7, 2)
-
-            self.set_box_util(2, 3.8, 2.2, 0.5, 0.5)
-            self.set_box_util(3, 4.3, 2.2, 0.7, 2)
-
-            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
-            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
-
-            self.set_box_util(4, -2.7, 2.6, 1, 1)
-
-            # 0的沙发要倒换
-            self.set_box_util(5, -4.2, 2.2, 1, 2)
-            self.set_box_util(5, -3, 4.3, 1, 1)
-
-        elif self.current_scene_index == 5:
-            # self.set_box_util(0, 0.5, -2, 0.5, 0.5)
-            # self.set_box_util(1, 1.87, -2, 1, 1)
-            self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
-            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
-
-            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
-            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
-
-            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
-            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
-
-            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
-            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
-
-            self.set_box_util(4, -2.6, -2.4, 1, 1)
-
-            self.set_box_util(5, -4.4, -3.8, 1, 2)
-            self.set_box_util(5, -4.3, -1, 1, 1)
-
-        elif self.current_scene_index == 6:
-            # self.set_box_util(0, 0.7, -2.8, 0.5, 0.5)
-            # self.set_box_util(1, 0.7, -1.89, 1, 1)
-            self.set_box_util(2, 1.14, -3.78, 0.5, 0.5)
-            self.set_box_util(3, 1.16, -4.24, 2, 0.7)
-
-            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
-            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
-
-            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
-            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
-
-            self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
-            self.set_box_util(3, 2.4, 4.3, 2, 0.7)
-
-            self.set_box_util(4, -3.64, -2.6, 1, 1)
-
-            self.set_box_util(5, -1.79, -2.68, 1, 2)
-            self.set_box_util(5, -4.3, -4.24, 1, 1)
-
-        elif self.current_scene_index == 7:
-            # self.set_box_util(0, 1.62, -1.08, 0.5, 0.5)
-            # self.set_box_util(1, 1.64, -2.12, 1, 1)
-            self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
-            self.set_box_util(3, 2.18, -4.33, 2, 0.7)
-
-            self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
-            self.set_box_util(3, 4.24, -2.54, 0.7, 2)
-
-            self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
-            self.set_box_util(3, 4.3, 2.3, 0.7, 2)
-
-            self.set_box_util(2, 1, 3.7, 0.5, 0.5)
-            self.set_box_util(3, 1.46, 4.45, 2, 0.7)
-
-            self.set_box_util(4, -2.85, -0.58, 1, 1)
-
-            self.set_box_util(5, -4.57, -0.47, 1, 2)
-            self.set_box_util(5, -1.81, -0.97, 1, 1)
+        model_pose = self.get_model_pose('chair_breakfast')
+        self.set_box_util(0, model_pose.position.x, model_pose.position.y, 0.5, 0.5)
+        model_pose = self.get_model_pose('tb_breakfast')
+        self.set_box_util(1, model_pose.position.x, model_pose.position.y, 1, 1)
+        model_pose = self.get_model_pose('desk')
+        quaternion = (
+            model_pose.orientation.x,
+            model_pose.orientation.y,
+            model_pose.orientation.z,
+            model_pose.orientation.w
+        )
+        _, _, raw = transformations.euler_from_quaternion(quaternion)
+        if 1.55 <= raw <= 1.58 or -1.58 <= raw <= -1.55:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 0.7, 2)
+        else:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 2, 0.7)
+        model_pose = self.get_model_pose('of_chair')
+        self.set_box_util(2, model_pose.position.x, model_pose.position.y, 0.5, 0.5)
+        model_pose = self.get_model_pose('desk1')
+        quaternion = (
+            model_pose.orientation.x,
+            model_pose.orientation.y,
+            model_pose.orientation.z,
+            model_pose.orientation.w
+        )
+        _, _, raw = transformations.euler_from_quaternion(quaternion)
+        if 1.55 <= raw <= 1.58 or -1.58 <= raw <= -1.55:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 0.7, 2)
+        else:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 2, 0.7)
+        model_pose = self.get_model_pose('of_chair1')
+        self.set_box_util(2, model_pose.position.x, model_pose.position.y, 0.5, 0.5)
+        model_pose = self.get_model_pose('desk2')
+        quaternion = (
+            model_pose.orientation.x,
+            model_pose.orientation.y,
+            model_pose.orientation.z,
+            model_pose.orientation.w
+        )
+        _, _, raw = transformations.euler_from_quaternion(quaternion)
+        if 1.55 <= raw <= 1.58 or -1.58 <= raw <= -1.55:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 0.7, 2)
+        else:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 2, 0.7)
+        model_pose = self.get_model_pose('of_chair2')
+        self.set_box_util(2, model_pose.position.x, model_pose.position.y, 0.5, 0.5)
+        model_pose = self.get_model_pose('desk3')
+        quaternion = (
+            model_pose.orientation.x,
+            model_pose.orientation.y,
+            model_pose.orientation.z,
+            model_pose.orientation.w
+        )
+        _, _, raw = transformations.euler_from_quaternion(quaternion)
+        if 1.55 <= raw <= 1.58 or -1.58 <= raw <= -1.55:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 0.7, 2)
+        else:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 2, 0.7)
+        model_pose = self.get_model_pose('of_chair3')
+        self.set_box_util(2, model_pose.position.x, model_pose.position.y, 0.5, 0.5)
+        model_pose = self.get_model_pose('table')
+        self.set_box_util(4, model_pose.position.x, model_pose.position.y, 1, 1)
+        model_pose = self.get_model_pose('sofa1')
+        self.set_box_util(5, model_pose.position.x, model_pose.position.y, 1, 1)
+        model_pose = self.get_model_pose('sofa')
+        quaternion = (
+            model_pose.orientation.x,
+            model_pose.orientation.y,
+            model_pose.orientation.z,
+            model_pose.orientation.w
+        )
+        _, _, raw = transformations.euler_from_quaternion(quaternion)
+        if -0.1 <= raw <= 0.1 or 3.0 <= raw <= 3.2:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 2, 1)
+        else:
+            self.set_box_util(3, model_pose.position.x, model_pose.position.y, 1, 2)
+        # if self.current_scene_index == 4:
+        #     # self.set_box_util(0, 0.68, -2.03, 0.5, 0.5)
+        #     # self.set_box_util(1, 1.78, -2.28, 1, 1)
+        #     self.set_box_util(2, 2.22, -3.89, 0.5, 0.5)
+        #     self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+        #
+        #     self.set_box_util(2, 3.8, -2.6, 0.5, 0.5)
+        #     # 1.57的桌子要倒换
+        #     self.set_box_util(3, 4.38, -2.92, 0.7, 2)
+        #
+        #     self.set_box_util(2, 3.8, 2.2, 0.5, 0.5)
+        #     self.set_box_util(3, 4.3, 2.2, 0.7, 2)
+        #
+        #     self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+        #     self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+        #
+        #     self.set_box_util(4, -2.7, 2.6, 1, 1)
+        #
+        #     # 0的沙发要倒换
+        #     self.set_box_util(5, -4.2, 2.2, 1, 2)
+        #     self.set_box_util(5, -3, 4.3, 1, 1)
+        #
+        # elif self.current_scene_index == 5:
+        #     # self.set_box_util(0, 0.5, -2, 0.5, 0.5)
+        #     # self.set_box_util(1, 1.87, -2, 1, 1)
+        #     self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
+        #     self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+        #
+        #     self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+        #     self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+        #
+        #     self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+        #     self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+        #
+        #     self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+        #     self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+        #
+        #     self.set_box_util(4, -2.6, -2.4, 1, 1)
+        #
+        #     self.set_box_util(5, -4.4, -3.8, 1, 2)
+        #     self.set_box_util(5, -4.3, -1, 1, 1)
+        #
+        # elif self.current_scene_index == 6:
+        #     # self.set_box_util(0, 0.7, -2.8, 0.5, 0.5)
+        #     # self.set_box_util(1, 0.7, -1.89, 1, 1)
+        #     self.set_box_util(2, 1.14, -3.78, 0.5, 0.5)
+        #     self.set_box_util(3, 1.16, -4.24, 2, 0.7)
+        #
+        #     self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+        #     self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+        #
+        #     self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+        #     self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+        #
+        #     self.set_box_util(2, 2.4, 3.8, 0.5, 0.5)
+        #     self.set_box_util(3, 2.4, 4.3, 2, 0.7)
+        #
+        #     self.set_box_util(4, -3.64, -2.6, 1, 1)
+        #
+        #     self.set_box_util(5, -1.79, -2.68, 1, 2)
+        #     self.set_box_util(5, -4.3, -4.24, 1, 1)
+        #
+        # elif self.current_scene_index == 7:
+        #     # self.set_box_util(0, 1.62, -1.08, 0.5, 0.5)
+        #     # self.set_box_util(1, 1.64, -2.12, 1, 1)
+        #     self.set_box_util(2, 2.08, -3.87, 0.5, 0.5)
+        #     self.set_box_util(3, 2.18, -4.33, 2, 0.7)
+        #
+        #     self.set_box_util(2, 3.72, -2.44, 0.5, 0.5)
+        #     self.set_box_util(3, 4.24, -2.54, 0.7, 2)
+        #
+        #     self.set_box_util(2, 3.7, 2.4, 0.5, 0.5)
+        #     self.set_box_util(3, 4.3, 2.3, 0.7, 2)
+        #
+        #     self.set_box_util(2, 1, 3.7, 0.5, 0.5)
+        #     self.set_box_util(3, 1.46, 4.45, 2, 0.7)
+        #
+        #     self.set_box_util(4, -2.85, -0.58, 1, 1)
+        #
+        #     self.set_box_util(5, -4.57, -0.47, 1, 2)
+        #     self.set_box_util(5, -1.81, -0.97, 1, 1)
 
     def map_callback(self, msg):
         if self.update_belief_flag is True:
@@ -474,7 +564,6 @@ class GazeboEnv:
                     self.move_plan_filed = True
         # else:
         #     print("获取导航状态禁用中")
-
     def get_frontier_callback(self, frontier_marker):
         if self.update_frontier_flag is True:
             if len(frontier_marker.points) > 0:
@@ -596,8 +685,7 @@ class GazeboEnv:
         self.trajectory_points = []
 
     # 策略已经生成所选择的边界点，边界点的集合应该在状态空间中
-    def step(self, policy_center_frontiers, next_position, travel_dist, current_scene_index):
-        self.current_scene_index = current_scene_index
+    def step(self, policy_center_frontiers, next_position, travel_dist):
         self.center_policy_frontier = policy_center_frontiers
         # 此时的机器人位置是未导航之前的
         # 修改dist计算方式
@@ -769,7 +857,8 @@ class GazeboEnv:
         # 由于我们不存在groud_truth，所以没有真正的探索率，用探索面积代替
         area = np.sum(self.robot_belief == 255)
         # groud_truth 既然是特定场景，那么可以获取
-        area = np.sum(self.robot_belief == 255) / 33376
+        # area = np.sum(self.robot_belief == 255) / 33376
+        area = np.sum(self.robot_belief == 255) / 34000
         return area
 
     def find_index_from_coords(self, position):
@@ -1024,10 +1113,10 @@ class GazeboEnv:
         # rospy.sleep(6.0)
         msg.data = scene_index
         self.gmapping_reset_pub.publish(msg)
-        if scene_index > 20:
+        if scene_index == 5:
             time.sleep(2.0)
         else:
-            time.sleep(10.0)
+            time.sleep(13.0)
         self.update_position_flag = True
         while self.update_position_flag is True:
             pass
@@ -1086,7 +1175,7 @@ class GazeboEnv:
         # 手动建图获得的自由区域的像素点数量为33376
         # 在原本的设计中，训练阶段看节点效用，验证阶段看节点效用以及探索率
         # if self.test and np.sum(self.robot_belief == 255) >= int(33376 * 0.99):
-        if np.sum(self.robot_belief == 255) >= int(33376 * 0.99):
+        if np.sum(self.robot_belief == 255) >= int(34000 * 0.99):
             done = True
         elif np.sum(self.node_utility) == 0:
             done = True

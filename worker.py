@@ -16,7 +16,6 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 from parameter import *
 
-from memory_profiler import profile
 
 
 class Worker:
@@ -33,7 +32,6 @@ class Worker:
         self.local_policy_net = policy_net
         self.local_q_net = q_net
 
-        self.current_node_index = 0
         self.travel_dist = 0
         self.robot_position = self.env.robot_position
 
@@ -206,8 +204,8 @@ class Worker:
         done = False
         no_nbv = False
         # self.env.clear_trajectory()
-        if curr_episode == 1:
-            self.env.reset(4)
+        # if curr_episode == 1:
+        #     self.env.reset(4)
 
         observations = self.get_observations()
         # obervations 在地图漂移的情况下会是None
@@ -258,8 +256,7 @@ class Worker:
                 reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
                     policy_center_frontier,
                     next_position,
-                    self.travel_dist,
-                    self.current_scene_index)
+                    self.travel_dist)
                 # 这里直接跳出会导致 经验池的尺寸出问题
                 # if reward < -10000:
                 #     break
@@ -294,7 +291,7 @@ class Worker:
                     print("判断为撞了")
                     print(self.env.plan_filed_count)
                 self.save_reward_done(reward, done)
-                # print("reward:{}".format(reward))
+                print("reward:{}".format(reward))
                 observations = self.get_observations()
                 # 观测获取失败
                 if observations is None:
@@ -327,13 +324,17 @@ class Worker:
             path = gifs_path
             self.make_gif(path, curr_episode)
         # 每12轮换一次场景
-        if curr_episode % 10 == 0:
-            self.current_scene_index += 1
-            scene_index = self.current_scene_index % 4 + 4
-            self.env.reset(scene_index)
+        if curr_episode % 5 == 0:
+            # 每次都新建，所以没了
+            # self.current_scene_index += 1
+
+            # scene_index = int(curr_episode / 10 % 4) + 4
+            # self.env.reset(scene_index)
+            self.env.reset(4)
         else:
-            reset_position_index = (self.current_scene_index % 4) + 20
-            self.env.reset(reset_position_index)
+            # reset_position_index = int(curr_episode / 10 % 4) + 20
+            # self.env.reset(reset_position_index)
+            self.env.reset(5)
         # 重启nbv
         # if no_nbv is True:
         #     reset_msg = Int8()
