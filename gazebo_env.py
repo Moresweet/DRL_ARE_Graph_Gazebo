@@ -957,8 +957,8 @@ class GazeboEnv:
         score = 0
         # 计算语义目标关系得分
         # 加条件防止封界抖动时的情况，重复匹配现象
-        if self.bbox_having_flag is True:
-            score = self.match_object_score() * 10
+        # if self.bbox_having_flag is True:
+        #     score = self.match_object_score() * 10
         # 计算与选择的边界簇中心距离，引导机器人靠近选择的边界中心
         # 簇中心选择的好坏需要任务的完成情况得分来评判，毕竟簇中心的选择是策略的输出
         # self.robot_postion 是已经导航完毕的机器人所在点
