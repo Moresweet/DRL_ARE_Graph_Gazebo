@@ -166,6 +166,8 @@ class GazeboEnv:
         self.plan_filed_count = 0
         # 当前场景索引,4为origin
         self.current_scene_index = 4
+        # 为场景指定
+        self.ground_truth_area = 0
         self.move_plan_filed = False
         # flag均以锁的形式使用
         self.update_belief_flag = True
@@ -687,6 +689,7 @@ class GazeboEnv:
 
     # 策略已经生成所选择的边界点，边界点的集合应该在状态空间中
     def step(self, policy_center_frontiers, next_position, travel_dist):
+        self.ground_truth_area = rospy.get_param('/ground_truth_area')
         self.center_policy_frontier = policy_center_frontiers
         # 此时的机器人位置是未导航之前的
         # 修改dist计算方式
@@ -848,10 +851,10 @@ class GazeboEnv:
         # self.last_center_frontier = copy.deepcopy(self.center_policy_frontier)
         self.old_robot_belief = copy.deepcopy(self.robot_belief)
         if done:
-            reward += 150  # a finishing reward
+            reward += 50  # a finishing reward
         #
         if plan_failed:
-            reward -= 30  # plan failed reward
+            reward -= 20  # plan failed reward
         return reward, done, self.robot_position, travel_dist, plan_failed, no_nbv, object_reward
 
     def evaluate_exploration_area(self):
@@ -859,7 +862,7 @@ class GazeboEnv:
         area = np.sum(self.robot_belief == 255)
         # groud_truth 既然是特定场景，那么可以获取
         # area = np.sum(self.robot_belief == 255) / 33376
-        area = np.sum(self.robot_belief == 255) / 34000
+        area = np.sum(self.robot_belief == 255) / self.ground_truth_area
         return area
 
     def find_index_from_coords(self, position):
@@ -1176,7 +1179,7 @@ class GazeboEnv:
         # 手动建图获得的自由区域的像素点数量为33376
         # 在原本的设计中，训练阶段看节点效用，验证阶段看节点效用以及探索率
         # if self.test and np.sum(self.robot_belief == 255) >= int(33376 * 0.99):
-        if np.sum(self.robot_belief == 255) >= int(34000):  # * 0.99):
+        if np.sum(self.robot_belief == 255) >= self.ground_truth_area * 0.98:  # * 0.99):
             done = True
         elif np.sum(self.node_utility) == 0:
             done = True
@@ -1211,7 +1214,7 @@ class GazeboEnv:
         plt.plot(self.xPoints[-1], self.yPoints[-1], 'mo', markersize=8)
         plt.plot(self.xPoints[0], self.yPoints[0], 'co', markersize=8)
         # plt.pause(0.1)
-        plt.suptitle('Explored area: {}  Travel distance: {:.4g}'.format(self.explored_area, travel_dist))
+        plt.suptitle('Explored area: {:.4g}  Travel distance: {:.4g}'.format(self.explored_area, travel_dist))
         plt.tight_layout()
         plt.savefig('{}/{}_{}_samples.png'.format(path, n, step, dpi=150))
         # plt.show()

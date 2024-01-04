@@ -17,7 +17,6 @@ from visualization_msgs.msg import MarkerArray
 from parameter import *
 
 
-
 class Worker:
     def __init__(self, meta_agent_id, policy_net, q_net, global_step, device='cuda', greedy=False, save_image=False):
         self.device = device
@@ -281,13 +280,14 @@ class Worker:
                         print("超时，获取不到边界中心")
                         no_nbv = True
                         mutex = False
+                # 边界获取不到特殊处理，也属于完成了
                 if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                     done = True
                     reward += 50
                     print("done")
                 # 连续规划失败2次，可以重启了，算是撞了
                 if self.env.plan_filed_count >= 2:
-                    reward -= 20
+                    # reward -= 20
                     print("判断为撞了")
                     print(self.env.plan_filed_count)
                 self.save_reward_done(reward, done)
@@ -312,6 +312,7 @@ class Worker:
                 if done or no_nbv or self.env.plan_filed_count >= 2:
                     break
 
+        print("done:{}".format(done))
         self.env.clear_trajectory()
         # save metrics
         self.perf_metrics['travel_dist'] = self.travel_dist
