@@ -28,7 +28,7 @@ class Graph_generator:
         self.node_utility = None
         self.guidepost = None
         # 检测到的目标
-        self.object_value = None
+        # self.object_value = None
 
     def edge_clear_all_nodes(self):
         self.graph = Graph()
@@ -78,36 +78,36 @@ class Graph_generator:
         # calculate the utility as the number of observable frontiers of each node
         # save the observable frontiers to be reused
         self.node_utility = []
-        self.object_value = []
+        # self.object_value = []
         self.w = []
         for coords in self.node_coords:
             node = Node(coords, frontiers, robot_belief)
-            if bbox_having_flag is True:
-                is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector, object_area)
-                # 更新检测到的目标向量
-                if is_update_object is True:
-                    node.set_object_value(current_node_one_hot)
+            # if bbox_having_flag is True:
+            #     is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector, object_area)
+            #     # 更新检测到的目标向量
+            #     if is_update_object is True:
+            #         node.set_object_value(current_node_one_hot)
             self.nodes_list.append(node)
             utility = node.utility
             self.node_utility.append(utility)
             # 添加检测目标
-            self.object_value.append([node.object_value])
-        print(self.object_value)
+            # self.object_value.append([node.object_value])
+        # print(self.object_value)
         self.node_utility = np.array(self.node_utility)
         # 转换为数组
-        self.object_value = np.array(self.object_value)
+        # self.object_value = np.array(self.object_value)
 
         # guidepost is a binary sign to indicate weather one node has been visited
         # 通过维护的route判断的
         self.guidepost = np.zeros((self.node_coords.shape[0], 1))
-        self.object_value = np.zeros((self.node_coords.shape[0], 1))
+        # self.object_value = np.zeros((self.node_coords.shape[0], 1))
         x = self.node_coords[:, 0] + self.node_coords[:, 1] * 1j
         for node in self.route_node:
             # 将起始点加入
             index = np.argwhere(x.reshape(-1) == node[0] + node[1] * 1j)[0]
             self.guidepost[index] = 1
 
-        return self.node_coords, self.graph.edges, self.node_utility, self.guidepost, self.object_value
+        return self.node_coords, self.graph.edges, self.node_utility, self.guidepost
 
     def update_graph(self, robot_position, robot_belief, old_robot_belief, frontiers, old_frontiers, object_vector,
                      object_area, bbox_having_flag):
@@ -176,7 +176,7 @@ class Graph_generator:
             self.nodes_list.append(node)
 
         self.node_utility = []
-        self.object_value = []
+        # self.object_value = []
         for i, coords in enumerate(self.node_coords):
             utility = self.nodes_list[i].utility
             self.node_utility.append(utility)
@@ -186,17 +186,17 @@ class Graph_generator:
             #     if is_update_object is True:
             #         self.nodes_list[i].set_object_value(current_node_one_hot)
             # 采用数组遍历的方式
-            for object_index in range(len(object_vector)):
-                if bbox_having_flag is True:
-                    is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector[object_index], object_area[object_index])
-                    # 更新检测到的目标向量
-                    if is_update_object is True:
-                        self.nodes_list[i].set_object_value(current_node_one_hot)
-            self.object_value.append([self.nodes_list[i].object_value])
+            # for object_index in range(len(object_vector)):
+            #     if bbox_having_flag is True:
+            #         is_update_object, current_node_one_hot = self.check_object_range(coords, object_vector[object_index], object_area[object_index])
+            #         # 更新检测到的目标向量
+            #         if is_update_object is True:
+            #             self.nodes_list[i].set_object_value(current_node_one_hot)
+            # self.object_value.append([self.nodes_list[i].object_value])
             # self.object_value = np.concatenate([self.object_value, np.array([[node.object_value]])])
         self.node_utility = np.array(self.node_utility)
         # 添加，全局更新后，处理逻辑也相应变化
-        self.object_value = np.array(self.object_value)
+        # self.object_value = np.array(self.object_value)
 
         self.guidepost = np.zeros((self.node_coords.shape[0], 1))
         x = self.node_coords[:, 0] + self.node_coords[:, 1] * 1j
@@ -204,7 +204,7 @@ class Graph_generator:
             index = np.argwhere(x.reshape(-1) == node[0] + node[1] * 1j)
             self.guidepost[index] = 1
 
-        return self.node_coords, self.graph.edges, self.node_utility, self.guidepost, self.object_value
+        return self.node_coords, self.graph.edges, self.node_utility, self.guidepost
 
     def generate_uniform_points(self):
         x = np.linspace(0, self.map_x - 1, 30).round().astype(int)

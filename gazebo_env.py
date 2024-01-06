@@ -624,7 +624,7 @@ class GazeboEnv:
         # self.node_coords, self.graph, self.node_utility, self.guidepost = self.graph_generator.generate_graph(
         #     self.robot_position, self.robot_belief, self.frontiers)
         # 生成图添加目标的观测
-        self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.generate_graph(
+        self.node_coords, self.graph, self.node_utility, self.guidepost = self.graph_generator.generate_graph(
             self.robot_position, self.robot_belief, self.frontiers, self.bbox_detect_object, self.bbox_detect_area,
             self.bbox_having_flag)
         # 用完记得重置
@@ -830,7 +830,7 @@ class GazeboEnv:
         # self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.update_graph(
         #     self.robot_position, self.robot_belief, self.old_robot_belief, self.frontiers, self.observed_frontiers,
         #     self.bbox_detect_object, self.bbox_detect_area, self.bbox_having_flag)
-        self.node_coords, self.graph, self.node_utility, self.guidepost, self.object_value = self.graph_generator.update_graph(
+        self.node_coords, self.graph, self.node_utility, self.guidepost = self.graph_generator.update_graph(
             self.robot_position, self.robot_belief, self.old_robot_belief, self.frontiers, self.observed_frontiers,
             self.bbox_detect_array, self.bbox_area_array, self.bbox_having_flag)
         # 在begin中初始化
@@ -1005,7 +1005,7 @@ class GazeboEnv:
         # 即使不需要边界发现值了，也需要设置
         area_find_score = delta_num / 100
         # 还有一点就是两个选择的边界中心是不是会距离很远，根本难以匹配，所以最好还是障碍物语义应该在节点上，用节点去判断
-        reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
+        # reward += score  # 观察这里是不是也是太粗暴了，有点难以观察
         # reward += action_dist_score
         reward += area_find_score
         # if area_find_score == 0:
@@ -1052,7 +1052,7 @@ class GazeboEnv:
         new_object = None
         observed_object = None
         matching_count = 0
-        visited_object = []
+        # visited_object = []
         # 外扩之后，节点的object_value还是原来的值，这样比较可能没有意义
         # current_object_value = [self.object_value[index] for index in new_index if self.object_value[index] != 0]
         # if len(current_object_value) == 0:
@@ -1060,42 +1060,42 @@ class GazeboEnv:
         # else:
         #     current_object_value = current_object_value[0]
         # 难以分辨到底谁是谁扩张出来的
-        for node in expanded_indices:
-            # 已经使用了临时表，这样应该可以完美匹配到
-            current_object_value = tmp_table[node]
-            if current_object_value != 0 and current_object_value not in visited_object:
-                observed_index = self.graph_generator.graph.get_nearest_nodes(str(node))
-                # 找到连通点
-                if len(observed_index) == 0:
-                    continue
-                # 有match在屏蔽掉
-                # visited_object.append(current_object_value)
-                new_object = number_to_one_hot(current_object_value[0])
-                # 剔除在新区域中的点
-                observed_index = [x for x in observed_index if x not in new_index]
-                # 筛选出observed_index中的非零权值
-                observed_nonzero_values = [self.object_value[index] for index in observed_index if
-                                           self.object_value[index] != 0]
-                # 多次匹配问题，一种类型匹配一次就够了
-                # observed_nonzero_values = list(set(observed_nonzero_values))
-                unique_list = []
-                for x in observed_nonzero_values:
-                    if x not in unique_list:
-                        unique_list.append(x)
-                observed_nonzero_values = unique_list
-                for value in observed_nonzero_values:
-                    observed_object = number_to_one_hot(value[0])
-                    # matching_count += np.sum(
-                    #     np.logical_and(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
-                    matching_count += np.sum(
-                        np.dot(np.array(new_object).reshape(-1, 1),
-                               np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
-                    if matching_count != 0:
-                        visited_object.append(current_object_value[0])
-                        print("有语义得分")
-                        print(new_object)
-                        print(observed_object)
-        return matching_count
+        # for node in expanded_indices:
+        #     # 已经使用了临时表，这样应该可以完美匹配到
+        #     current_object_value = tmp_table[node]
+        #     if current_object_value != 0 and current_object_value not in visited_object:
+        #         observed_index = self.graph_generator.graph.get_nearest_nodes(str(node))
+        #         # 找到连通点
+        #         if len(observed_index) == 0:
+        #             continue
+        #         # 有match在屏蔽掉
+        #         # visited_object.append(current_object_value)
+        #         new_object = number_to_one_hot(current_object_value[0])
+        #         # 剔除在新区域中的点
+        #         observed_index = [x for x in observed_index if x not in new_index]
+        #         # 筛选出observed_index中的非零权值
+        #         observed_nonzero_values = [self.object_value[index] for index in observed_index if
+        #                                    self.object_value[index] != 0]
+        #         # 多次匹配问题，一种类型匹配一次就够了
+        #         # observed_nonzero_values = list(set(observed_nonzero_values))
+        #         unique_list = []
+        #         for x in observed_nonzero_values:
+        #             if x not in unique_list:
+        #                 unique_list.append(x)
+        #         observed_nonzero_values = unique_list
+        #         for value in observed_nonzero_values:
+        #             observed_object = number_to_one_hot(value[0])
+        #             # matching_count += np.sum(
+        #             #     np.logical_and(np.array(new_object).reshape(-1, 1), np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
+        #             matching_count += np.sum(
+        #                 np.dot(np.array(new_object).reshape(-1, 1),
+        #                        np.array(observed_object).reshape(1, -1)) * self.object_dist_matrix)
+        #             if matching_count != 0:
+        #                 visited_object.append(current_object_value[0])
+        #                 print("有语义得分")
+        #                 print(new_object)
+        #                 print(observed_object)
+        # return matching_count
 
     def reset(self, scene_index):
         self.clear_trajectory()
@@ -1200,14 +1200,14 @@ class GazeboEnv:
         #     plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
         #              zorder=1)  # plot edges will take long time
         plt.scatter(self.node_coords[:, 0], self.node_coords[:, 1], c=self.node_utility, zorder=5)
-        object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
-        object_coords = np.array(object_coords)
-        if object_coords.__len__() != 0:
+        # object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
+        # object_coords = np.array(object_coords)
+        # if object_coords.__len__() != 0:
             # plt.scatter(object_coords[:, 0], object_coords[:, 1], c=self.object_value[self.object_value != 0].astype(int), zorder=6)
             # plt.plot(object_coords[:, 0], object_coords[:, 1], c='r', linewidth=1, zorder=1)
-            values = self.object_value[self.object_value != 0].astype(int)
-            colors = plt.cm.viridis(values / values.max())  # 根据值生成颜色，这里使用了viridis colormap
-            plt.scatter(object_coords[:, 0], object_coords[:, 1], c=colors, marker='s', s=80, zorder=6)
+            # values = self.object_value[self.object_value != 0].astype(int)
+            # colors = plt.cm.viridis(values / values.max())  # 根据值生成颜色，这里使用了viridis colormap
+            # plt.scatter(object_coords[:, 0], object_coords[:, 1], c=colors, marker='s', s=80, zorder=6)
             # print("绘制目标点")
         plt.scatter(self.frontiers[:, 0], self.frontiers[:, 1], c='r', s=2, zorder=3)
         plt.plot(self.xPoints, self.yPoints, 'b', linewidth=2)

@@ -41,6 +41,7 @@ class TestWorker:
         )
         self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.update_center_frontier = True
+        self.current_scene_index = 1
         self.exploration_time = []
 
     def select_closest_frontier(self, next_position):
@@ -165,21 +166,15 @@ class TestWorker:
         node_utility = copy.deepcopy(self.env.node_utility)
         guidepost = copy.deepcopy(self.env.guidepost)
 
-        # 添加目标观测输入
-        object_value = copy.deepcopy(self.env.object_value)
-
         # normalize observations
         node_coords = node_coords / 384
         node_utility = node_utility / 120
-        # 6类，最大到19
-        object_value = object_value / 19
 
         # transfer to node inputs tensor
         n_nodes = node_coords.shape[0]
         node_utility_inputs = node_utility.reshape((n_nodes, 1))
-        node_object_value_inputs = object_value.reshape((n_nodes, 1))
         # 对齐维度
-        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost, node_object_value_inputs), axis=1)
+        node_inputs = np.concatenate((node_coords, node_utility_inputs, guidepost), axis=1)
         node_inputs = torch.FloatTensor(node_inputs).unsqueeze(0).to(self.device)  # (1, node_padding_size+1, 3)
 
         # calculate a mask for padded node
