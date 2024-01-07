@@ -3,7 +3,7 @@ EMBEDDING_DIM = 128
 K_SIZE = 20  # the number of neighbors
 
 USE_GPU = True  # do you want to use GPUS?
-NUM_GPU = 0  # the number of GPUs
+NUM_GPU = 1  # the number of GPUs
 # NUM_META_AGENT = 16  # the number of processes
 NUM_META_AGENT = 1
 FOLDER_NAME = 'ae_clean'

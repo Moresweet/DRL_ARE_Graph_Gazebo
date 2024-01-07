@@ -120,14 +120,17 @@ class TestWorker:
                     os.makedirs(gifs_path)
                 self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
 
-            if done:
+            # 边界获取不到特殊处理，也属于完成了
+            if no_nbv is True and self.env.explored_area > 0.95 and done is False:
+                done = True
+                print("done")
+
+            if done or no_nbv or self.env.plan_filed_count >= 2:
                 break
-            elif no_nbv:
-                reset_msg = Int8()
-                reset_msg.data = 1
-                self.reset_nbv_pub.publish(reset_msg)
-                time.sleep(2)
-                break
+            reset_msg = Int8()
+            reset_msg.data = 1
+            self.env.reset_nbv_pub.publish(reset_msg)
+            time.sleep(3)
 
         self.perf_metrics['travel_dist'] = self.travel_dist
         self.perf_metrics['explored_area'] = self.env.explored_area

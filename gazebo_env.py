@@ -729,7 +729,11 @@ class GazeboEnv:
         # 新方法，直接获取状态码
         # 仍然需要超时保障
         while self.goal_arrive_flag is False and self.move_plan_filed is False:
-            if time.time() - start_time > 8:
+            time_out_sec = 8
+            if self.test is True:
+                print("测试环境")
+                time_out_sec = 30
+            if time.time() - start_time > time_out_sec:
                 # 规划失败，关闭导航状态检测
                 self.goal_cancel()
                 self.update_nav_status_flag = False
