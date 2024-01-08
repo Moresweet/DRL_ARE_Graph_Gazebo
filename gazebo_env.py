@@ -159,6 +159,9 @@ class GazeboEnv:
 
         # 连续规划失败基本是陷入了不可逆的困境
         self.plan_filed_count = 0
+        # 为场景指定
+        self.ground_truth_area = 0
+        self.current_scene_index = 4
         self.move_plan_filed = False
         # flag均以锁的形式使用
         self.update_belief_flag = True
@@ -481,6 +484,7 @@ class GazeboEnv:
 
     # 策略已经生成所选择的边界点，边界点的集合应该在状态空间中
     def step(self, policy_center_frontiers, next_position, travel_dist):
+        self.ground_truth_area = rospy.get_param('/ground_truth_area')
         self.center_policy_frontier = policy_center_frontiers
         # 此时的机器人位置是未导航之前的
         # 修改dist计算方式
@@ -520,7 +524,11 @@ class GazeboEnv:
         # 新方法，直接获取状态码
         # 仍然需要超时保障
         while self.goal_arrive_flag is False and self.move_plan_filed is False:
-            if time.time() - start_time > 8:
+            time_out_sec = 8
+            if self.test is True:
+                # print("测试")
+                time_out_sec = 30
+            if time.time() - start_time > time_out_sec:
                     # 规划失败，关闭导航状态检测
                     self.goal_cancel()
                     self.update_nav_status_flag = False
@@ -528,6 +536,7 @@ class GazeboEnv:
                     # 后退一步
                     # self.backward_step()
                     self.plan_filed_count += 1
+                    print("超时{}".format(self.plan_filed_count))
                     break
 
         if self.move_plan_filed:
@@ -651,7 +660,7 @@ class GazeboEnv:
         # 由于我们不存在groud_truth，所以没有真正的探索率，用探索面积代替
         area = np.sum(self.robot_belief == 255)
         # groud_truth 既然是特定场景，那么可以获取
-        area = np.sum(self.robot_belief == 255) / 33376
+        area = np.sum(self.robot_belief == 255) / self.ground_truth_area
         return area
 
     def find_index_from_coords(self, position):
@@ -821,31 +830,34 @@ class GazeboEnv:
                         print(observed_object)
         return matching_count
 
-    def reset(self):
+    def reset(self, scene_index):
         self.clear_trajectory()
         self.bbox_detect_object = np.zeros([6, 1]) * 0
         self.bbox_detect_area = np.full((6, 2), np.inf)
-        object_state = self.set_self_state
-        object_state.pose.position.x = -3.5
-        object_state.pose.position.y = -3.6
-        object_state.pose.position.z = 0.0
-        quaternion = Quaternion.from_euler(1.0, 0.0, 0.0)
-        object_state.pose.orientation.x = quaternion.x
-        object_state.pose.orientation.y = quaternion.y
-        object_state.pose.orientation.z = quaternion.z
-        object_state.pose.orientation.w = quaternion.w
-        self.set_state.publish(object_state)
+        msg = Int8()
+        # msg.data = 9
+        # self.gmapping_reset_pub.publish(msg)
+        # rospy.sleep(6.0)
+        msg.data = scene_index
+        self.gmapping_reset_pub.publish(msg)
+        if scene_index == 5:
+            time.sleep(2.0)
+        else:
+            time.sleep(13.0)
         self.update_position_flag = True
         while self.update_position_flag is True:
             pass
-        self.update_belief_flag = True
-        while self.update_belief_flag is True:
-            pass
-        msg = Int8()
+        # self.update_belief_flag = True
+        # while self.update_belief_flag is True:
+        #     pass
+        # msg = Int8()
         msg.data = 1
-        rospy.sleep(3.0)
+        # rospy.sleep(3.0)
         self.gmapping_reset_pub.publish(msg)
-        rospy.sleep(2.0)
+        # rospy.sleep(4.0)
+        time.sleep(5.0)
+        self.update_robot_belief(self.robot_belief)
+        self.old_robot_belief = copy.deepcopy(self.robot_belief)
 
     def gen_relation_matrix(self):
         # 定义目标类别和关系
@@ -905,15 +917,15 @@ class GazeboEnv:
             plt.plot(self.graph_generator.x[i], self.graph_generator.y[i], 'tan',
                      zorder=1)  # plot edges will take long time
         plt.scatter(self.node_coords[:, 0], self.node_coords[:, 1], c=self.node_utility, zorder=5)
-        object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
-        object_coords = np.array(object_coords)
-        if object_coords.__len__() != 0:
-            # plt.scatter(object_coords[:, 0], object_coords[:, 1], c=self.object_value[self.object_value != 0].astype(int), zorder=6)
-            # plt.plot(object_coords[:, 0], object_coords[:, 1], c='r', linewidth=1, zorder=1)
-            values = self.object_value[self.object_value != 0].astype(int)
-            colors = plt.cm.viridis(values / values.max())  # 根据值生成颜色，这里使用了viridis colormap
-            plt.scatter(object_coords[:, 0], object_coords[:, 1], c=colors, marker='s', s=80, zorder=6)
-            print("绘制目标点")
+        # object_coords = [self.node_coords[i] for i in np.where(self.object_value != 0)[0]]
+        # object_coords = np.array(object_coords)
+        # if object_coords.__len__() != 0:
+        #     # plt.scatter(object_coords[:, 0], object_coords[:, 1], c=self.object_value[self.object_value != 0].astype(int), zorder=6)
+        #     # plt.plot(object_coords[:, 0], object_coords[:, 1], c='r', linewidth=1, zorder=1)
+        #     values = self.object_value[self.object_value != 0].astype(int)
+        #     colors = plt.cm.viridis(values / values.max())  # 根据值生成颜色，这里使用了viridis colormap
+        #     plt.scatter(object_coords[:, 0], object_coords[:, 1], c=colors, marker='s', s=80, zorder=6)
+        #     print("绘制目标点")
         plt.scatter(self.frontiers[:, 0], self.frontiers[:, 1], c='r', s=2, zorder=3)
         plt.plot(self.xPoints, self.yPoints, 'b', linewidth=2)
         plt.plot(self.xPoints[-1], self.yPoints[-1], 'mo', markersize=8)

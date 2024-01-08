@@ -121,7 +121,18 @@ class Graph_generator:
         old_node_coords = copy.deepcopy(self.node_coords)
         self.node_coords = np.concatenate((self.node_coords, new_node_coords))
         # 防止重复
-        self.node_coords = np.unique(self.node_coords, axis=0)
+        # self.node_coords = np.unique(self.node_coords, axis=0)
+        seen = set()
+        unique_coords = []
+        for coord in self.node_coords:
+            # 先将元组转换为不可变对象，比如元组
+            coord_tuple = tuple(coord)
+            if coord_tuple not in seen:
+                seen.add(coord_tuple)
+                unique_coords.append(coord)
+
+        # 将结果转换回NumPy数组
+        self.node_coords = np.array(unique_coords)
 
         # update the collision free graph
         # for coords in new_node_coords:

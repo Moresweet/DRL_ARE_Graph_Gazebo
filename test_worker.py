@@ -9,6 +9,7 @@ import copy
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Int8
 
 from gazebo_env import GazeboEnv
@@ -18,6 +19,9 @@ from test_parameter import *
 import rospy
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
+
+from gazebo_env import convert_map_pixel
+from gazebo_env import convert_pixel_map
 
 
 class TestWorker:
@@ -42,6 +46,20 @@ class TestWorker:
         self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.update_center_frontier = True
         self.exploration_time = []
+        self.odom = rospy.Subscriber(
+            "/odom", Odometry, self.odom_callback, queue_size=1
+        )
+        self.total_distance = 0
+        self.prev_odom = None
+
+    def odom_callback(self, msg):
+        if self.prev_odom is None:
+            self.prev_odom = msg
+        delta_x = convert_map_pixel(msg.pose.pose.position.x) - convert_map_pixel(self.prev_odom.pose.pose.position.x)
+        delta_y = convert_map_pixel(msg.pose.pose.position.y) - convert_map_pixel(self.prev_odom.pose.pose.position.y)
+        distance = (delta_x ** 2 + delta_y ** 2) ** 0.5
+        self.total_distance += distance
+        self.prev_odom = msg
 
     def select_closest_frontier(self, next_position):
         while self.update_center_frontier is True:
@@ -68,19 +86,22 @@ class TestWorker:
         observations = self.get_observations()
         self.exploration_time = []
         for i in range(120):
+            start_time = rospy.Time.now()
             next_position, action_index = self.select_node(observations)
 
             policy_center_frontier = self.select_closest_frontier(next_position)
-
-            # start_time = rospy.Time.now()
-            start_time = timeit.default_timer()
+            end_time = rospy.Time.now()
+            time_elapsed = end_time - start_time
+            infer_time = time_elapsed.to_sec()
+            start_time = rospy.Time.now()
+            # start_time = timeit.default_timer()
             reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
                 policy_center_frontier,
                 next_position,
                 self.travel_dist)
             # 注意，不要使用rostime，因为gazebo的仿真加速，导致这个时间其实并不可靠
-            # end_time = rospy.Time.now()
-            end_time = timeit.default_timer()
+            end_time = rospy.Time.now()
+            # end_time = timeit.default_timer()
             time_elapsed = end_time - start_time
             time_elapsed_sec = time_elapsed.to_sec()
             self.exploration_time.append(time_elapsed_sec)
@@ -109,6 +130,11 @@ class TestWorker:
             if no_nbv is True and self.env.explored_area > 0.95 and done is False:
                 done = True
                 reward += 150
+            # 连续规划失败2次，可以重启了，算是撞了
+            if self.env.plan_filed_count >= 2:
+                reward -= 20
+                print("判断为撞了")
+                print(self.env.plan_filed_count)
 
             # save evaluation data
             if SAVE_TRAJECTORY:
@@ -116,21 +142,27 @@ class TestWorker:
                     os.makedirs(trajectory_path)
                 csv_filename = f'results/trajectory/ours_trajectory_result.csv'
                 new_file = False if os.path.exists(csv_filename) else True
-                field_names = ['dist', 'area', 'time']
+                field_names = ['dist', 'area', 'time', 'infer_time']
                 with open(csv_filename, 'a') as csvfile:
                     writer = csv.writer(csvfile)
                     if new_file:
                         writer.writerow(field_names)
-                    csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255), time_elapsed_sec]).reshape(1, -1)
+                    # csv_data = np.array(
+                    #     [self.travel_dist, np.sum(self.env.robot_belief == 255), time_elapsed_sec, infer_time]).reshape(
+                    #     1, -1)
+                    csv_data = np.array(
+                        [self.total_distance, np.sum(self.env.robot_belief == 255), time_elapsed_sec, infer_time]).reshape(
+                        1, -1)
                     writer.writerows(csv_data)
 
             # save a frame
             if self.save_image:
                 if not os.path.exists(gifs_path):
                     os.makedirs(gifs_path)
-                self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+                # self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+                self.env.plot_env(self.global_step, gifs_path, i, self.total_distance)
 
-            if done or no_nbv:
+            if done or no_nbv or self.env.plan_filed_count >= 2:
                 break
 
         self.perf_metrics['travel_dist'] = self.travel_dist
@@ -149,14 +181,15 @@ class TestWorker:
                 writer = csv.writer(csvfile)
                 if new_file:
                     writer.writerow(field_names)
-                csv_data = np.array([self.travel_dist]).reshape(-1, 1)
+                # csv_data = np.array([self.travel_dist]).reshape(-1, 1)
+                csv_data = np.array([self.total_distance]).reshape(-1, 1)
                 writer.writerows(csv_data)
 
         # save gif
         if self.save_image:
             path = gifs_path
             self.make_gif(path, curr_episode)
-        self.env.reset()
+        self.env.reset(5)
         reset_msg = Int8()
         reset_msg.data = 1
         self.env.reset_nbv_pub.publish(reset_msg)
@@ -266,4 +299,4 @@ class TestWorker:
 
     def work(self, curr_episode):
         self.run_episode(curr_episode)
-        self.env.reset()
+        self.env.reset(5)
