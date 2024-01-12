@@ -700,6 +700,7 @@ class GazeboEnv:
         goal_y = convert_pixel_map(next_position[1])
         # 用于计算奖励用，计算奖励时position已经是导航完成的
         start_position = copy.deepcopy(self.robot_position)
+        record_time_s = timeit.default_timer()
         self.send_goal(goal_x, goal_y)
         # 开启导航状态检测
         self.update_nav_status_flag = True
@@ -731,7 +732,7 @@ class GazeboEnv:
         while self.goal_arrive_flag is False and self.move_plan_filed is False:
             time_out_sec = 8
             if self.test is True:
-                print("测试环境")
+                # print("测试环境")
                 time_out_sec = 30
             if time.time() - start_time > time_out_sec:
                 # 规划失败，关闭导航状态检测
@@ -753,6 +754,9 @@ class GazeboEnv:
         if plan_failed is False:
             # 规划成功，清空
             self.plan_filed_count = 0
+
+        record_time_t = timeit.default_timer()
+        time_elapsed_sec = record_time_t - record_time_s
 
         self.goal_arrive_flag = False
         self.move_plan_filed = False
@@ -799,7 +803,7 @@ class GazeboEnv:
                 # no_nbv =
                 print("step获取不到边界")
                 # 重启nbv，不应该直接返回，因为有的时候地图出问题，会导致nbv出问题。而不是探索完了，先直接返回吧，但是还是要区分nbv和done
-                return 0, False, self.robot_position, travel_dist, False, True, 0
+                return 0, False, self.robot_position, travel_dist, False, True, 0, 5
         end_time = timeit.default_timer()
         execution_time = end_time - start_time_1
         # print("更新边界信息成功，用时{}s".format(execution_time))
@@ -859,7 +863,7 @@ class GazeboEnv:
         #
         if plan_failed:
             reward -= 20  # plan failed reward
-        return reward, done, self.robot_position, travel_dist, plan_failed, no_nbv, object_reward
+        return reward, done, self.robot_position, travel_dist, plan_failed, no_nbv, object_reward, time_elapsed_sec
 
     def evaluate_exploration_area(self):
         # 由于我们不存在groud_truth，所以没有真正的探索率，用探索面积代替

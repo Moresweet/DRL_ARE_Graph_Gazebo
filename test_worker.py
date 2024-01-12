@@ -9,6 +9,7 @@ import copy
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Int8
 
 from gazebo_env import GazeboEnv
@@ -18,6 +19,8 @@ from test_parameter import *
 import rospy
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
+from gazebo_env import convert_map_pixel
+from gazebo_env import convert_pixel_map
 
 
 class TestWorker:
@@ -42,6 +45,20 @@ class TestWorker:
         self.reset_nbv_pub = rospy.Publisher("/reset_nbv", Int8, queue_size=1)
         self.update_center_frontier = True
         self.exploration_time = []
+        self.odom = rospy.Subscriber(
+            "/odom", Odometry, self.odom_callback, queue_size=1
+        )
+        self.total_distance = 0
+        self.prev_odom = None
+
+    def odom_callback(self, msg):
+        if self.prev_odom is None:
+            self.prev_odom = msg
+        delta_x = convert_map_pixel(msg.pose.pose.position.x) - convert_map_pixel(self.prev_odom.pose.pose.position.x)
+        delta_y = convert_map_pixel(msg.pose.pose.position.y) - convert_map_pixel(self.prev_odom.pose.pose.position.y)
+        distance = (delta_x ** 2 + delta_y ** 2) ** 0.5
+        self.total_distance += distance
+        self.prev_odom = msg
 
     def select_closest_frontier(self, next_position):
         while self.update_center_frontier is True:
@@ -71,14 +88,14 @@ class TestWorker:
             next_position, action_index = self.select_node(observations)
 
             policy_center_frontier = self.select_closest_frontier(next_position)
-            start_time = timeit.default_timer()
-            reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
+            # start_time = timeit.default_timer()
+            reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward, time_elapsed_sec = self.env.step(
                 policy_center_frontier,
                 next_position,
                 self.travel_dist)
-            end_time = timeit.default_timer()
-            time_elapsed = end_time - start_time
-            time_elapsed_sec = time_elapsed
+            # end_time = timeit.default_timer()
+            # time_elapsed = end_time - start_time
+            # time_elapsed_sec = time_elapsed
             self.exploration_time.append(time_elapsed_sec)
             observations = self.get_observations()
 
@@ -111,14 +128,17 @@ class TestWorker:
                     writer = csv.writer(csvfile)
                     if new_file:
                         writer.writerow(field_names)
-                    csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255), time_elapsed_sec]).reshape(1, -1)
+                    # csv_data = np.array([self.travel_dist, np.sum(self.env.robot_belief == 255), time_elapsed_sec]).reshape(1, -1)
+                    csv_data = np.array(
+                        [self.total_distance, np.sum(self.env.robot_belief == 255), time_elapsed_sec]).reshape(1, -1)
                     writer.writerows(csv_data)
 
             # save a frame
             if self.save_image:
                 if not os.path.exists(gifs_path):
                     os.makedirs(gifs_path)
-                self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+                # self.env.plot_env(self.global_step, gifs_path, i, self.travel_dist)
+                self.env.plot_env(self.global_step, gifs_path, i, self.total_distance)
 
             # 边界获取不到特殊处理，也属于完成了
             if no_nbv is True and self.env.explored_area > 0.95 and done is False:
@@ -148,7 +168,8 @@ class TestWorker:
                 writer = csv.writer(csvfile)
                 if new_file:
                     writer.writerow(field_names)
-                csv_data = np.array([self.travel_dist]).reshape(-1, 1)
+                # csv_data = np.array([self.travel_dist]).reshape(-1, 1)
+                csv_data = np.array([self.total_distance]).reshape(-1, 1)
                 writer.writerows(csv_data)
 
         # save gif
