@@ -14,7 +14,7 @@ length_path = f'results/length'
 
 # NUM_TEST = 100
 NUM_RUN = 1
-NUM_TEST = 10
+NUM_TEST = 30
 SAVE_GIFS = True  # do you want to save GIFs
 SAVE_TRAJECTORY = True  # do you want to save per-step metrics
 SAVE_LENGTH = True  # do you want to save per-episode metrics

@@ -93,17 +93,17 @@ class TestWorker:
             end_time = rospy.Time.now()
             time_elapsed = end_time - start_time
             infer_time = time_elapsed.to_sec()
-            start_time = rospy.Time.now()
+            # start_time = rospy.Time.now()
             # start_time = timeit.default_timer()
-            reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward = self.env.step(
+            reward, done, self.robot_position, self.travel_dist, plan_status, no_nbv, object_reward,  time_elapsed_sec= self.env.step(
                 policy_center_frontier,
                 next_position,
                 self.travel_dist)
             # 注意，不要使用rostime，因为gazebo的仿真加速，导致这个时间其实并不可靠
-            end_time = rospy.Time.now()
-            # end_time = timeit.default_timer()
-            time_elapsed = end_time - start_time
-            time_elapsed_sec = time_elapsed.to_sec()
+            # end_time = rospy.Time.now()
+            # # end_time = timeit.default_timer()
+            # time_elapsed = end_time - start_time
+            # time_elapsed_sec = time_elapsed.to_sec()
             self.exploration_time.append(time_elapsed_sec)
             if no_nbv:
                 reset_msg = Int8()
